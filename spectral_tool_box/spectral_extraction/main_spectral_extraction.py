@@ -185,14 +185,14 @@ class Expectra_2D:
                 initial_center = np.nanmedian(picks[:,0])
             if len(initial_separation) != n_picks-1:
                 print('Given a init_separation  was not added we will guess it')
-                init_separation = np.nanmedian(picks,axis=0)[1:] - initial_center
+                initial_separation = np.nanmedian(picks,axis=0)[1:] - initial_center
         if n_picks ==1 and not initial_separation:
             initial_center = np.argmax(np.nanmedian(self.cut_data,axis=1))
             initial_separation = []
         
-        print("initial_center:",initial_center,"initial_separation:",init_separation)
-        if isinstance(init_separation,(float,int)):
-            initial_separation = [init_separation]
+        print("initial_center:",initial_center,"initial_separation:",initial_separation)
+        if isinstance(initial_separation,(float,int)):
+            initial_separation = [initial_separation]
         band = self.band
         if band == "NIR":
             mask_list=[[5800,7005],[13500,15900]] #teluric
@@ -452,8 +452,16 @@ class Expectra_2D:
         fig, ax = plt.subplots(1, 1, figsize=(35, 15))#, gridspec_kw={'height_ratios': [2, 1]})
         if not flux_columns:
             flux_columns = [i for i in df.columns.values if 'flux' in i.split('_')[0]]
-            
+        alpha = 0.75
+        if len(flux_columns)>2:
+            alpha  = 0.6
         colors = ['b','r','g']
+        colors = ['dodgerblue','crimson','forestgreen']
+        #colors = ['navy','firebrick','limegreen']
+        colors = ['#1f77b4', '#d62728', '#2ca02c']
+        colors = ['#4c72b0', '#dd8452', '#55a868']
+        # Alternative 3: ColorBrewer Set1 (vibrant and high-contrast colors)
+        colors = ['#377eb8', '#e41a1c', '#4daf4a']
         ecolors = ['lightskyblue','LightCoral',"LightGreen"]
         all_flux = []
         for i,flux in enumerate(flux_columns):
@@ -466,7 +474,7 @@ class Expectra_2D:
                 error_ = df['std_'+flux].values
                 error_[error_>flux_] = 0
                 print("For plotting convenience the errors>flux will be set to 0")
-            ax.errorbar(wavelength,flux_,yerr=error_,color=colors[i], ecolor=ecolors[i],label=flux)
+            ax.errorbar(wavelength,flux_,yerr=error_,color=colors[i], ecolor=ecolors[i],label=flux,alpha=0.9)
             all_flux.append(flux_)
         all_flux = np.concatenate(all_flux)
         ylim_lower, ylim_upper = np.percentile(all_flux, [1, 99.99])
