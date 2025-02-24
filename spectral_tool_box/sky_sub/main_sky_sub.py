@@ -175,11 +175,18 @@ class Main_Sky_Sub():
         #Combine quality by a simple average (or you could do min, max, etc.)
         self.quality_comb = np.nanmean(final_quality, axis=0).astype(int)
         
-    def run_median_spectrum(self,save=False,window_size=5,lower_percentile=1,upper_percentile=99.9):
+    def run_median_spectrum(self,save=False,window_size=5,lower_percentile=1,upper_percentile=99.9,where_median=[],**kwargs):
         images_to_combine = [key for key in self.dic_results.keys() if self.dic_results[key]["sky_sub_work"]]
+        list_medians = []
         for i,n in enumerate(images_to_combine): 
             print(f"run_median_spectrum for image {n}" )
-            signal_median = np.median(self.flux_clipped_corrected[n][np.where(self.where_is_the_signal[n] == 1)],axis=0)
+            if len(where_median) == len(images_to_combine) and len(where_median[n])==len(self.where_is_the_signal[n]):
+                print("edited where is the signal")
+                where_is_the_signal = where_median[n]
+            else:
+                where_is_the_signal= self.where_is_the_signal[n]
+            signal_median = np.median(self.flux_clipped_corrected[n][np.where(where_is_the_signal== 1)],axis=0)
+            list_medians.append(signal_median)
             #post_signal_median = medfilt(signal_median, kernel_size=window_size)
             ymin, ymax = np.percentile(signal_median, [lower_percentile, upper_percentile])
             signal_median[(signal_median < ymin) | (signal_median > ymax)] = 0
@@ -190,7 +197,7 @@ class Main_Sky_Sub():
                 data[0].data = signal_median.data
                 data.writeto(output_filename, overwrite=True) 
                 print(f"saved file in {output_filename}")
-    
+        return list_medians
     def save_sci(self,path="",person="F. Avila-Vera",use_clipped=True):
         #TODO what will happen when we have multiple OB1 to combine them, 
         # I am guessing two scenarios the first one is all the systems are alight at the same pixel so no worries but exist a case in where they are not and T.T
