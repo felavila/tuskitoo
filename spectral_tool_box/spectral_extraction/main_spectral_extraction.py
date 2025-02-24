@@ -406,7 +406,7 @@ class Expectra_2D:
         plt.show()
     
     
-    def plot_spectra(self,add_error=False,add_raw=False,save='',force_pix=False,z_s=None,add_lines=False,rest_frame=False,**kwargs):
+    def plot_spectra(self,add_error=False,add_raw=False,save='',force_pix=False,z_s=None,add_lines=False,rest_frame=False,flux_columns=None,**kwargs):
         """
         Plot the extracted spectra with optional error bars, raw spectra, and emission/absorption lines.
         
@@ -450,7 +450,9 @@ class Expectra_2D:
                 wavelength = df["wavelength"].values/(1+z_s)
                 xlabel = "rest frame wavelength (A)"
         fig, ax = plt.subplots(1, 1, figsize=(35, 15))#, gridspec_kw={'height_ratios': [2, 1]})
-        flux_columns = [i for i in df.columns.values if 'flux' in i.split('_')[0]]
+        if not flux_columns:
+            flux_columns = [i for i in df.columns.values if 'flux' in i.split('_')[0]]
+            
         colors = ['b','r','g']
         ecolors = ['lightskyblue','LightCoral',"LightGreen"]
         all_flux = []
