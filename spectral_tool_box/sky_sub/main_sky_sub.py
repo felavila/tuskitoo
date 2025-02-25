@@ -78,6 +78,9 @@ class Main_Sky_Sub():
                 image_counts = self.dic_results[n][key_counts]
             else:
                 image_counts = self.dic_results[n][key_counts]
+            if np.all(image_counts == np.zeros_like(image_counts)):
+                print("The key_counts",key_counts,"is full with zeros for image",n,"we will use instant image_median_sky_subtracted",)
+                image_counts = self.dic_results[n]["image_median_sky_subtracted"]
             error_counts = values["errors"] #mmm
             self.key_counts = key_counts
             flux = flux_correction(image_counts,Re,exptime,airmass,gain,bin,extinction)

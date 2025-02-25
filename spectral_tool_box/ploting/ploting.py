@@ -175,7 +175,8 @@ def plot_cliped_spectra(spectras,lower_percentile=0,upper_percentile=100,ylim=No
 
 
 def median_image(image,base=[],ylim=None,set_median=False,xlim=None,do_vertical=True,save=""):
-    #falta agregar lo del cambio de color 
+    #TODO color change
+    #TODO when do_vertical==False for 2 images desapear one 
     if isinstance(image,np.ndarray):
         if len(image.shape)==2:
             image = [image]
