@@ -1,7 +1,6 @@
 """
-spectral_extraction.
-
-Spectral_Tool_Box.
+Tudspek
+Two Dimensional spectral kit
 """
 
 

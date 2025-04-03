@@ -7,7 +7,7 @@ import numpy as np
 import warnings
 from .utils import find_signal,guess_picks_image,gaussian_with_error,integrated_gaussian,integrated_moffat,moffat_with_error
 from .fitting import parallel_fit
-from spectral_tool_box.sky_sub.utils import sigma_clip_1d
+from Tudspek.sky_sub.utils import sigma_clip_1d
 import pandas as pd 
 import pickle
 
