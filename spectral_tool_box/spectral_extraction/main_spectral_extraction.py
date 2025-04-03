@@ -57,7 +57,8 @@ class Expectra_2D:
                 self.original_error = self.fits_image[1].data
                 self.original_quality = self.fits_image[2].data
             elif len(self.fits_image)==1:
-                self.original_data = self.fits_image[0].data
+                self.original_data,self.header = self.fits_image[0].data,self.fits_image[0].header
+                #self.original_data = self.fits_image[0].data
         elif isinstance(object,np.ndarray) and len(object.shape)==2:
             self.object = 'mmm'
             print("Object is a numpy array you can also add the Header later")
@@ -115,9 +116,15 @@ class Expectra_2D:
         # if isinstance(distances,dict):
         #     self.distances_arc = distances
         #     if "CD2_2"  in self.relevant_keywords_header.keys():
-        #             self.distances_pix = {key:value/self.relevant_keywords_header["CD2_2"] for key,value in distances.items()}
+        #    
+    def arc_to_pix(self,value):
+        distances_pix = value/self.relevant_keywords_header["CD2_2"]
+        return distances_pix
+        #{key:value/self.relevant_keywords_header["CD2_2"] for key,value in distances.items()}
+    
+           
     def run_parallel_fit(self,n_picks=2,pixel_limit=[],bound_sigma=[2],distribution="gaussian",
-                        param_value=None,param_limit=None,param_fix=None,no_use_real_error=False,initial_separation=[],initial_center=None):
+                        param_value=None,param_limit=None,param_fix=None,no_use_real_error=False,initial_separation=[],initial_center=None,**kwargs):
         """
         Run the parallel fitting process on the instance's image data.
 
@@ -193,7 +200,7 @@ class Expectra_2D:
         print("initial_center:",initial_center,"initial_separation:",initial_separation)
         if isinstance(initial_separation,(float,int)):
             initial_separation = [initial_separation]
-        band = self.band
+        band = kwargs.get("band",self.band)
         if band == "NIR":
             mask_list=[[5800,7005],[13500,15900]] #teluric
         elif band =="VIS":
@@ -292,8 +299,10 @@ class Expectra_2D:
             if len(images) == num_source:
                 print(f'setting names of images {np.arange(1, num_source+1).astype(str).tolist()} to {images}')
                 result_panda = result_panda.rename(columns={i:i.replace(i.split("_")[-1],images[int(i.split("_")[-1])-1]) for i in result_panda.columns.values if i.split("_")[-1] in np.arange(1, num_source+1).astype(str).tolist()})#{'A': 'Alpha', 'B': 'Beta'}) 
+                self.images = images
             else:
                 print(f'The number of image ({images}) is different of the number of source ({num_source}) check it')
+
         if over_write or not hasattr(self, 'results'):
             print("saving")
             self.results = {'result_panda':result_panda,"multiple_dist":multiple_dist,'image_2d_model':image_2d_model}
@@ -320,6 +329,34 @@ class Expectra_2D:
         except Exception as e:
             print(f"An error occurred while saving the dictionary: {e}")
     
+    def save_spectra_as_pickle(self,save=None,band=None):
+        """_summary_
+
+        Args:
+            save (_type_, optional): _description_. Defaults to None.
+            band (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
+        result = self.results['result_panda']
+        band = band or self.band
+        if band is None:
+            band = "?"
+            print("Warning band not found")
+        dic_result = {}
+        for i in self.images:
+            band = band.lower()
+            dic_result[f"{i}_{band}"] = {"wavelength":result["wavelength"].values,"flux":result[f"flux_{i}"].values,"std":result[f"std_{i}"].values,"band":band}
+        if save:
+            if list(dic_result.keys())>0:
+                with open(f"{save}_{band}.pickle", "wb") as file:
+                    print("Save as",f"{save}_{band}.pickle")
+                    pickle.dump(dic_result, file)
+            else:
+                print("Empty dictionary ")
+        else:
+            return dic_result
     
     def save_to_fits(self,filename,person="F. Avila-Vera"):
         """
@@ -367,6 +404,9 @@ class Expectra_2D:
     #TODO maybe save the keys from the fiting process 
     
     
+    def plot_column(self,):
+        return 
+    
     def plot_data_model(self,n):
         """
         Plot the data, individual model components, and the residual for the nth column.
@@ -409,7 +449,6 @@ class Expectra_2D:
     def plot_spectra(self,add_error=False,add_raw=False,save='',force_pix=False,z_s=None,add_lines=False,rest_frame=False,flux_columns=None,**kwargs):
         """
         Plot the extracted spectra with optional error bars, raw spectra, and emission/absorption lines.
-        
         Parameters:
         -----------
         add_error : bool, optional, default=False
@@ -488,18 +527,20 @@ class Expectra_2D:
             agn_lines = {
             "Lya": 1216,         # Lyman-alpha
             "CIV": 1549,         # Carbon IV
+            "CIII_1909": 1909,   # Carbon III]
             "MgII": 2800,        # Magnesium II
             "HeII_4686": 4686,   # Helium II
             "Hβ": 4861,          # Hydrogen Balmer beta
-            "OIII_4959": 4959,   # Doubly ionized oxygen
-            "OIII_5007": 5007,   # Doubly ionized oxygen
-            "OI_6300": 6300,     # Neutral oxygen
+            "OIII_4959": 4959,   # [O III] 4959
+            "OIII_5007": 5007,   # [O III] 5007
+            "OI_6300": 6300,     # [O I] 6300
+            "NII_6548": 6548,    # [N II] 6548
             "Hα": 6563,          # Hydrogen Balmer alpha
-            "NII_6548": 6548,    # Singly ionized nitrogen
-            "NII_6583": 6583,    # Singly ionized nitrogen
-            "SII_6716": 6716,    # Singly ionized sulfur
-            "SII_6731": 6731     # Singly ionized sulfur
+            "NII_6583": 6583,    # [N II] 6583
+            "SII_6716": 6716,    # [S II] 6716
+            "SII_6731": 6731     # [S II] 6731
             }
+
             for line_name,central_wavelength in agn_lines.items():
                 if rest_frame:
                     central_wavelength = central_wavelength
@@ -572,6 +613,10 @@ class Expectra_2D:
         array-like
             The cut-out 2D image.
         """
+        if image.shape[0]//2 != 0:
+            nan_row = np.full((1, image.shape[1]), np.nan)
+            # Append the row to the bottom of the image
+            image = np.vstack([image, nan_row])
         if not center:
             center = int(np.nanmedian(np.array([find_signal(i) for i in image.T])))
         if not size:

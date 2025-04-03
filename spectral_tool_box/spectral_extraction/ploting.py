@@ -87,7 +87,7 @@ def plot_column(panda,column_name="",**kwargs):
 
 def plot_spectra(panda,wavelength,obj=None,xlim=None,ylim=None,save=False,add_lines=False,xlabel=None,**kwargs):
         #it will be interesting can change between clear and not clear in this routine to check the diferences
-        "redo"
+        #"redo"
         if isinstance(obj,str):
             obj = [obj]
         wavelength = None

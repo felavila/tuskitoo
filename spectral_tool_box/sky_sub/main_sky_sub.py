@@ -11,7 +11,7 @@ from astropy.io import fits
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-class Main_Sky_Sub():
+class SkySubtraction:
     def __init__(self,images_paths,response_paths,telluric_path=None,stare_spectrums=None,OB="OB",mask_image_x=None,mask_image_y=None,by_eye_signal_position=None,
                 not_considering_pixels=[]):
         self.images_paths = images_paths
