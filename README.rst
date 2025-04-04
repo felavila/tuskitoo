@@ -1,12 +1,12 @@
 =======
-Tudspek: Two Dimensional Spectral Kit
+Tuskitoo: Two-dim Spectra Kit Tool
 =======
 .. .https://python-package-generator.readthedocs.io/en/master/
 .. .| |build| |coverage| |docs| |maintainability| |codacy| |tech-debt|
 .. .| |release_version| |wheel| |supported_versions| |commits_since_specific_tag_on_master| |commits_since_latest_github_release|
 .. .| |pypi_stats| |ossf| |ruff| |black| |gh-lic||
 
-Tudspek is a Python 3 package that integrates a range of tools for advanced two-dimensional 
+Tuskitoo is a Python 3 package that integrates a range of tools for advanced two-dimensional 
 spectral analysis. It streamlines the process of spectral extraction, employs PCA for robust 
 sky subtraction, providing researchers with a comprehensive framework to analyze complex spectral data.
 
@@ -20,8 +20,8 @@ Features
 
 Installation
 =======
-
-Install Tudspek locally using the following command:
+.. .Tudspek
+Install  Tuskitoo locally using the following command:
 
 .. code-block:: shell
     
@@ -35,7 +35,7 @@ You need to have `Python` installed.
 References
 =======
 
-Tudspek is based on methodologies presented in the following paper(s):
+Tuskitoo is based on methodologies presented in the following paper(s):
 
 **Melo, A. et al. (2021). First black hole mass estimation for the quadruple lensed system WGD2038-4008.
 Astronomy & Astrophysics, Volume 656, id.A108, 10 pp.**  

@@ -9,9 +9,9 @@ build-backend = "poetry.core.masonry.api"
 # Information required for building (sdist/wheel)
 ## Also renders on pypi as 'subtitle'
 [tool.poetry]
-name = "tudspek"
+name = "tuskitoo"
 version = "0.0.1"
-description = "Tudspek"
+description = "Tuskitoo: Two-dim Spectra Kit Tool"
 authors = ["Felipe Avila Vera <felipe.avilav@postgrado.uv.cl>"]
 maintainers = ["Felipe Avila Vera <felipe.avilav@postgrado.uv.cl>"]
 license = "AGPL-3.0-only"
