@@ -1,8 +1,14 @@
+.. raw:: html
+
+    <div style="text-align: center">
+
 .. image:: docs/images/tuskitoo.png
    :alt: Tuskitoo Logo
-   :align: center
    :width: 400
 
+.. raw:: html
+
+    </div>
 
 =======
 Tuskitoo: Two-dim Spectra Kit Tool
