@@ -1,4 +1,4 @@
-Welcome to Tudspek  documentation!
+Welcome to tuskitoo  documentation!
 =========================================================================================
 
 .. include:: ../README.rst

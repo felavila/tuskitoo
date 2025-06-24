@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 #
 # This file configures the readthedocs.org server that Continuously
-# builds the documentation pages of the Tudspek
+# builds the documentation pages of the tuskitoo
 # project.
 
 # Docstrings in the source code should be written in
@@ -26,13 +26,13 @@ def get_templated_vars():
         'TemplatedVariables',
         (),
         dict(
-            project_slug='tudspek',
-            package_name='tudspek',
+            project_slug='tuskitoo',
+            package_name='tuskitoo',
             author_name='Felipe Avila Vera',
             year='2025',
             version='0.0.1',
             github_username='favila',
-            repo_name='tudspek',
+            repo_name='tuskitoo',
         ),
     )
 

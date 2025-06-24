@@ -1,7 +1,7 @@
 from astropy.io import fits
 from typing import Union, List
 import numpy as np 
-from Tudspek.sky_sub.tools import correct #? very unclear name for a function think more about it
+from tuskitoo.sky_sub.tools import correct #? very unclear name for a function think more about it
 from pathlib import Path 
 import os 
 import datetime

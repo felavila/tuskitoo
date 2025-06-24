@@ -5,7 +5,7 @@ import sys
 
 import click
 
-from tudspek import __version__
+from tuskitoo import __version__
 
 this_file_location = os.path.dirname(os.path.realpath(os.path.abspath(__file__)))
 

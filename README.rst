@@ -20,7 +20,7 @@ Features
 
 Installation
 =======
-.. .Tudspek
+.. . old Tudspek name 
 Install  Tuskitoo locally using the following command:
 
 .. code-block:: shell

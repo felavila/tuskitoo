@@ -17,9 +17,9 @@ You can contribute in many ways:
 
 ### Report Bugs
 
-Report bugs at [https://github.com/favila/tudspek/issues](https://github.com/favila/tudspek/issues).
+Report bugs at [https://github.com/favila/tuskitoo/issues](https://github.com/favila/tuskitoo/issues).
 W
-Stambling upon a Bug means encountering different behaviour than the expected/advertised one. When you are reporting a bug, please include the following infromation by filling in [the template](https://github.com/favila/tudspek/.github/blob/master/.github/ISSUE_TEMPLATE/bug_report.md).
+Stambling upon a Bug means encountering different behaviour than the expected/advertised one. When you are reporting a bug, please include the following infromation by filling in [the template](https://github.com/favila/tuskitoo/.github/blob/master/.github/ISSUE_TEMPLATE/bug_report.md).
 
 * Your operating system name and version.
 * Any details about your local setup that might be helpful in troubleshooting.
@@ -40,7 +40,7 @@ See [Contributor Setup](#Setting-Up-the-Code-for-Local-Development) to get start
 
 ### Write Documentation
 
-Tudspek could always use more documentation, whether as part of the official Tudspek docs, in docstrings, etc.
+tuskitoo could always use more documentation, whether as part of the official tuskitoo docs, in docstrings, etc.
 
 If you want to review your changes on the documentation locally, you can do:
 
@@ -54,7 +54,7 @@ You can open it in your browser at http://127.0.0.1:8000 !
 
 ### Submit Feedback
 
-The best way to send feedback is to file an issue at [https://github.com/favila/tudspek/issues](https://github.com/favila/tudspek/issues).
+The best way to send feedback is to file an issue at [https://github.com/favila/tuskitoo/issues](https://github.com/favila/tuskitoo/issues).
 
 If you are proposing a feature:
 
@@ -64,19 +64,19 @@ If you are proposing a feature:
 
 ## Setting Up the Code for Local Development
 
-Here's how to set up `tudspek` for local development.
+Here's how to set up `tuskitoo` for local development.
 
-1. Fork the `tudspek` repo on GitHub.
+1. Fork the `tuskitoo` repo on GitHub.
 2. Clone your fork locally:
 
 ```bash
-git clone git@github.com:favila/tudspek.git
+git clone git@github.com:favila/tuskitoo.git
 ```
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenv installed, this is how you set up your fork for local development:
 
 ```bash
-cd tudspek
+cd tuskitoo
 virtualenv env --python=python3
 source env/bin/activate
 pip install -e .
@@ -189,7 +189,7 @@ Core committers, use this section to:
 
 #### Fast and Focused
 
-Tudspek is designed to do one thing, and do that one thing very well.
+tuskitoo is designed to do one thing, and do that one thing very well.
 
 * Cover the important use cases and as little as possible beyond that :)
 
@@ -230,7 +230,7 @@ For other issues: encourage friendly discussion, moderate debate, offer your tho
 
 ### Process: Roadmap
 
-The roadmap located [here](https://github.com/favila/tudspek/milestones?direction=desc&sort=due_date&state=open)
+The roadmap located [here](https://github.com/favila/tuskitoo/milestones?direction=desc&sort=due_date&state=open)
 
 Due dates are flexible.
 

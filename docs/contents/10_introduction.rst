@@ -2,7 +2,7 @@
 Introduction
 ============
 
-| This is **Tudspek**, a *Python Package* desinged to ...
+| This is **tuskitoo**, a *Python Package* desinged to ...
 
 | Goal of this project is to TODO Document
 | Additionally, TODO Document

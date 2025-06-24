@@ -1,9 +1,9 @@
-"""Run `python -m tudspek`.
+"""Run `python -m tuskitoo`.
 
 Allow running Tudspek, also by invoking
 the python module:
 
-`python -m tudspek`
+`python -m tuskitoo`
 
 This is an alternative to directly invoking the cli that uses python as the
 "entrypoint".
@@ -11,7 +11,7 @@ This is an alternative to directly invoking the cli that uses python as the
 
 from __future__ import absolute_import
 
-from tudspek.cli import main
+from tuskitoo.cli import main
 
 if __name__ == "__main__":  # pragma: no cover
-    main(prog_name="tudspek")  # pylint: disable=unexpected-keyword-arg
+    main(prog_name="tuskitoo ")  # pylint: disable=unexpected-keyword-arg
