@@ -1,6 +1,6 @@
 .. image:: docs/images/tuskitoo.png
    :alt: Tuskitoo Logo
-   :align: left
+   :align: center
    :width: 400
 
 
