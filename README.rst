@@ -1,3 +1,9 @@
+.. image:: docs/images/tuskitoo.jpg
+   :alt: Tuskitoo Logo
+   :align: left
+   :width: 700
+
+
 =======
 Tuskitoo: Two-dim Spectra Kit Tool
 =======
@@ -30,7 +36,7 @@ Install  Tuskitoo locally using the following command:
 Prerequisites
 =============
 
-You need to have `Python` installed.
+You need to have `Python` == 3.10 installed .
 
 References
 =======
