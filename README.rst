@@ -1,4 +1,4 @@
-.. image:: docs/images/tuskitoo.jpg
+.. image:: docs/images/tuskitoo.png
    :alt: Tuskitoo Logo
    :align: left
    :width: 700
