@@ -2,39 +2,38 @@ version: 2
 
 build:
   os: ubuntu-22.04
-
-  # 1) Provision Python 3.12 and install these tools *before* any build commands run
   tools:
+    # Only specify the runtime here—no "install" key is allowed under tools
     python: "3.12"
-    install:
-      - "sphinx>=5.0"            # make sure the default sphinx-build is at least v5
-      - "poetry"
-      - "poetry-plugin-export"
 
-  # 2) All the shell steps you need to prepare and build the docs:
+  # All shell commands—including Sphinx install and the final build—go here
   commands:
-    # 2a) Export your docs‐only extras into a requirements file
+    # 1) Upgrade pip & setuptools
+    - pip install --upgrade pip setuptools
+
+    # 2) Install Sphinx ≥5.0 so applehelp will load
+    - pip install "sphinx>=5.0"
+
+    # 3) Install Poetry and export your docs extras
+    - pip install poetry poetry-plugin-export
     - poetry export -f requirements.txt -o req-docs.txt -E docs
 
-    # 2b) Install your docs extras + your package itself
+    # 4) Install your docs extras and your package
     - pip install --no-cache-dir -r req-docs.txt
     - pip install --upgrade --no-cache-dir .
 
-    # 2c) Auto‐generate the API stubs
+    # 5) Generate API stubs
     - sphinx-apidoc --force --module-first --separate -o docs/source/api tuskitoo
 
-    # 2d) (Optional) Build your mermaid diagrams
-    - python ./scripts/visualize-ga-workflow.py  \
-        > docs/cicd_mermaid.md 2>/dev/null  \
-        || echo "Skipping GA workflow visualization"
+    # 6) (Optional) Mermaid diagrams
+    - python ./scripts/visualize-ga-workflow.py \
+        > docs/cicd_mermaid.md 2>/dev/null || echo "Skipping GA workflow visualization"
     - python ./scripts/visualize-dockerfile.py \
-        > docs/dockerfile_mermaid.md 2>/dev/null \
-        || echo "Skipping Dockerfile visualization"
+        > docs/dockerfile_mermaid.md 2>/dev/null || echo "Skipping Dockerfile visualization"
 
-    # 2e) Finally, run Sphinx and drop the HTML into RTD’s output dir
+    # 7) Build the HTML into RTD’s output directory
     - sphinx-build -b html docs/source $READTHEDOCS_OUTPUT/html
 
-# 3) Tell RTD to package up these formats at the end
 formats:
   - htmlzip
   - pdf
