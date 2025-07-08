@@ -1,20 +1,20 @@
+# .readthedocs.yml  (must be valid YAML, not a shell script!)
 version: 2
 
 build:
   os: ubuntu-22.04
   tools:
-    # Only specify the runtime here—no "install" key is allowed under tools
     python: "3.12"
 
-  # All shell commands—including Sphinx install and the final build—go here
+  # All of your install + build steps go here:
   commands:
     # 1) Upgrade pip & setuptools
     - pip install --upgrade pip setuptools
 
-    # 2) Install Sphinx ≥5.0 so applehelp will load
+    # 2) Install Sphinx >=5.0 so the applehelp extension is happy
     - pip install "sphinx>=5.0"
 
-    # 3) Install Poetry and export your docs extras
+    # 3) Install Poetry and export docs‐only extras
     - pip install poetry poetry-plugin-export
     - poetry export -f requirements.txt -o req-docs.txt -E docs
 
@@ -22,16 +22,16 @@ build:
     - pip install --no-cache-dir -r req-docs.txt
     - pip install --upgrade --no-cache-dir .
 
-    # 5) Generate API stubs
+    # 5) Auto‐generate API stubs
     - sphinx-apidoc --force --module-first --separate -o docs/source/api tuskitoo
 
-    # 6) (Optional) Mermaid diagrams
+    # 6) Optional: build your mermaid diagrams
     - python ./scripts/visualize-ga-workflow.py \
         > docs/cicd_mermaid.md 2>/dev/null || echo "Skipping GA workflow visualization"
     - python ./scripts/visualize-dockerfile.py \
         > docs/dockerfile_mermaid.md 2>/dev/null || echo "Skipping Dockerfile visualization"
 
-    # 7) Build the HTML into RTD’s output directory
+    # 7) Finally, run Sphinx and dump HTML into RTD’s output dir
     - sphinx-build -b html docs/source $READTHEDOCS_OUTPUT/html
 
 formats:
