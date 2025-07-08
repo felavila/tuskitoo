@@ -1,7 +1,7 @@
 # Contributing
 
 Thank you for considering reading this guide!
-Contributions are welcome :)
+Contributions are welcome.
 
 
 * [Types of Contributions](#Types-of-Contributions)
@@ -40,7 +40,7 @@ See [Contributor Setup](#Setting-Up-the-Code-for-Local-Development) to get start
 
 ### Write Documentation
 
-tuskitoo could always use more documentation, whether as part of the official tuskitoo docs, in docstrings, etc.
+SHEAP could always use more documentation, whether as part of the official SHEAP docs, in docstrings, etc.
 
 If you want to review your changes on the documentation locally, you can do:
 
@@ -189,7 +189,7 @@ Core committers, use this section to:
 
 #### Fast and Focused
 
-tuskitoo is designed to do one thing, and do that one thing very well.
+SHEAP is designed to do one thing, and do that one thing very well.
 
 * Cover the important use cases and as little as possible beyond that :)
 

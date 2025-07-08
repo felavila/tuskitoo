@@ -1,4 +1,4 @@
 def test_import_module():
-    import tudspek
+    import tuskitoo
 
-    assert tudspek is not None
+    assert tuskitoo is not None

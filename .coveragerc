@@ -1,6 +1,7 @@
+#
 [run]
 source =
-    tudspek
+    tuskitoo
     tests
 
 [report]

@@ -1,4 +1,3 @@
-# .readthedocs.yml  (must be valid YAML, not a shell script!)
 version: 2
 
 build:
@@ -6,33 +5,33 @@ build:
   tools:
     python: "3.12"
 
-  # All of your install + build steps go here:
-  commands:
-    # 1) Upgrade pip & setuptools
-    - pip install --upgrade pip setuptools
+  jobs:
+    pre_install:
+      - python --version
+      - python -m pip install poetry poetry-plugin-export
+      - python -m poetry export -f requirements.txt -o req-docs.txt -E docs
 
-    # 2) Install Sphinx >=5.0 so the applehelp extension is happy
-    - pip install "sphinx>=5.0"
+    post_install:
+      - python -m pip install --upgrade --no-cache-dir pip setuptools
+      - python -m pip install --upgrade --no-cache-dir sphinx
+      - python -m pip install --upgrade --upgrade-strategy only-if-needed --no-cache-dir .
+      - python -m pip install --exists-action=w --no-cache-dir -r req-docs.txt
 
-    # 3) Install Poetry and export docs‐only extras
-    - pip install poetry poetry-plugin-export
-    - poetry export -f requirements.txt -o req-docs.txt -E docs
+    pre_build:
+      - sphinx-apidoc --force --module-first --separate -o docs/source/api tuskitoo
+      - python ./scripts/visualize-ga-workflow.py > docs/cicd_mermaid.md 2>/dev/null || echo "Skipping GA workflow visualization"
+      - python ./scripts/visualize-dockerfile.py > docs/dockerfile_mermaid.md 2>/dev/null || echo "Skipping Dockerfile visualization"
 
-    # 4) Install your docs extras and your package
-    - pip install --no-cache-dir -r req-docs.txt
-    - pip install --upgrade --no-cache-dir .
+python:
+  install:
+    - method: pip
+      path: .
+    - requirements: req-docs.txt
 
-    # 5) Auto‐generate API stubs
-    - sphinx-apidoc --force --module-first --separate -o docs/source/api tuskitoo
-
-    # 6) Optional: build your mermaid diagrams
-    - python ./scripts/visualize-ga-workflow.py \
-        > docs/cicd_mermaid.md 2>/dev/null || echo "Skipping GA workflow visualization"
-    - python ./scripts/visualize-dockerfile.py \
-        > docs/dockerfile_mermaid.md 2>/dev/null || echo "Skipping Dockerfile visualization"
-
-    # 7) Finally, run Sphinx and dump HTML into RTD’s output dir
-    - sphinx-build -b html docs/source $READTHEDOCS_OUTPUT/html
+sphinx:
+  builder: html
+  configuration: docs/source/conf.py
+  fail_on_warning: false
 
 formats:
   - htmlzip
