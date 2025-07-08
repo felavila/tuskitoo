@@ -3,7 +3,6 @@ version: 2
 build:
   os: ubuntu-22.04
   tools:
-    # provision Python 3.12
     python: "3.12"
   commands:
     # 1) Upgrade pip & setuptools
@@ -12,30 +11,23 @@ build:
     # 2) Ensure Sphinx >=5.0
     - pip install "sphinx>=5.0"
 
-    # 3) Install Poetry and export docs-extras
+    # 3) Install Poetry and export docs extras
     - pip install poetry poetry-plugin-export
     - poetry export -f requirements.txt -o req-docs.txt -E docs
 
-    # 4) Install your docs extras and your package itself
+    # 4) Install docs extras and your package
     - pip install --no-cache-dir -r req-docs.txt
     - pip install --upgrade --no-cache-dir .
 
-    # 5) Generate API stubs and any other prep
+    # 5) Generate API stubs
     - sphinx-apidoc --force --module-first --separate -o docs/source/api tuskitoo
+
+    # 6) (Optional) Generate CI/CD & Dockerfile diagrams
     - python ./scripts/visualize-ga-workflow.py > docs/cicd_mermaid.md 2>/dev/null || echo "Skipping GA workflow visualization"
     - python ./scripts/visualize-dockerfile.py > docs/dockerfile_mermaid.md 2>/dev/null || echo "Skipping Dockerfile visualization"
 
-python:
-  # if you still want RTD to install your package and any extra requirements:
-  install:
-    - method: pip
-      path: .
-    - requirements: req-docs.txt
-
-sphinx:
-  builder: html
-  configuration: docs/source/conf.py
-  fail_on_warning: false
+    # 7) Build the HTML into RTD’s expected output directory
+    - sphinx-build -b html docs/source $READTHEDOCS_OUTPUT/html
 
 formats:
   - htmlzip
