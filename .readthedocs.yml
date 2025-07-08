@@ -4,7 +4,12 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.12"
-
+    install:
+    - pip install --upgrade pip setuptools
+    - pip install "sphinx>=5.0"
+    - pip install poetry poetry-plugin-export
+    - poetry export -f requirements.txt -o req-docs.txt -E docs
+    - pip install --no-cache-dir -r req-docs.txt
   jobs:
     pre_install:
       - python --version
