@@ -2,33 +2,39 @@ version: 2
 
 build:
   os: ubuntu-22.04
+
+  # 1) Provision Python 3.12 and install these tools *before* any build commands run
   tools:
     python: "3.12"
+    install:
+      - "sphinx>=5.0"            # make sure the default sphinx-build is at least v5
+      - "poetry"
+      - "poetry-plugin-export"
+
+  # 2) All the shell steps you need to prepare and build the docs:
   commands:
-    # 1) Upgrade pip & setuptools
-    - pip install --upgrade pip setuptools
-
-    # 2) Ensure Sphinx ≥ 5.0
-    - pip install "sphinx>=5.0"
-
-    # 3) Install Poetry and export your docs extras
-    - pip install poetry poetry-plugin-export
+    # 2a) Export your docs‐only extras into a requirements file
     - poetry export -f requirements.txt -o req-docs.txt -E docs
 
-    # 4) Install docs-extras and your package
+    # 2b) Install your docs extras + your package itself
     - pip install --no-cache-dir -r req-docs.txt
     - pip install --upgrade --no-cache-dir .
 
-    # 5) Auto-generate API stubs
+    # 2c) Auto‐generate the API stubs
     - sphinx-apidoc --force --module-first --separate -o docs/source/api tuskitoo
 
-    # 6) (Optional) Generate mermaid diagrams
-    - python ./scripts/visualize-ga-workflow.py > docs/cicd_mermaid.md 2>/dev/null || echo "Skipping GA workflow visualization"
-    - python ./scripts/visualize-dockerfile.py > docs/dockerfile_mermaid.md 2>/dev/null || echo "Skipping Dockerfile visualization"
+    # 2d) (Optional) Build your mermaid diagrams
+    - python ./scripts/visualize-ga-workflow.py  \
+        > docs/cicd_mermaid.md 2>/dev/null  \
+        || echo "Skipping GA workflow visualization"
+    - python ./scripts/visualize-dockerfile.py \
+        > docs/dockerfile_mermaid.md 2>/dev/null \
+        || echo "Skipping Dockerfile visualization"
 
-    # 7) Build the HTML into RTD’s expected output directory
+    # 2e) Finally, run Sphinx and drop the HTML into RTD’s output dir
     - sphinx-build -b html docs/source $READTHEDOCS_OUTPUT/html
 
+# 3) Tell RTD to package up these formats at the end
 formats:
   - htmlzip
   - pdf
