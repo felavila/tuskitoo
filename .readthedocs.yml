@@ -8,21 +8,21 @@ build:
     # 1) Upgrade pip & setuptools
     - pip install --upgrade pip setuptools
 
-    # 2) Ensure Sphinx >=5.0
+    # 2) Ensure Sphinx ≥ 5.0
     - pip install "sphinx>=5.0"
 
-    # 3) Install Poetry and export docs extras
+    # 3) Install Poetry and export your docs extras
     - pip install poetry poetry-plugin-export
     - poetry export -f requirements.txt -o req-docs.txt -E docs
 
-    # 4) Install docs extras and your package
+    # 4) Install docs-extras and your package
     - pip install --no-cache-dir -r req-docs.txt
     - pip install --upgrade --no-cache-dir .
 
-    # 5) Generate API stubs
+    # 5) Auto-generate API stubs
     - sphinx-apidoc --force --module-first --separate -o docs/source/api tuskitoo
 
-    # 6) (Optional) Generate CI/CD & Dockerfile diagrams
+    # 6) (Optional) Generate mermaid diagrams
     - python ./scripts/visualize-ga-workflow.py > docs/cicd_mermaid.md 2>/dev/null || echo "Skipping GA workflow visualization"
     - python ./scripts/visualize-dockerfile.py > docs/dockerfile_mermaid.md 2>/dev/null || echo "Skipping Dockerfile visualization"
 
