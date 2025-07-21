@@ -61,9 +61,9 @@ def apply_telluric_correction(path_images: Union[str, List[str]],
         elif len(tel_hdulist) > 3:
             for i, hdu in enumerate(tel_hdulist):
                 if hasattr(hdu, "columns") and "mtrans" in hdu.columns.names:
-                n = i
-                telluric_data = hdu.data["mtrans"]
-                break
+                    n = i
+                    telluric_data = hdu.data["mtrans"]
+                    break
             else:
                 raise ValueError(f"No HDU with 'mtrans' column found in {tel_path}")
         else:
