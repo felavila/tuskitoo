@@ -58,10 +58,14 @@ def apply_telluric_correction(path_images: Union[str, List[str]],
             n = 1
         # Get the telluric data from the second HDU (index 1)
             telluric_data = tel_hdulist[1].data
-        elif len(tel_hdulist) >= 4 and "mtrans" in tel_hdulist[4].columns.names:
-            n=4
-            telluric_data = tel_hdulist[n].data["mtrans"]
-
+        elif len(tel_hdulist) > 3:
+            for i, hdu in enumerate(tel_hdulist):
+                if hasattr(hdu, "columns") and "mtrans" in hdu.columns.names:
+                n = i
+                telluric_data = hdu.data["mtrans"]
+                break
+            else:
+                raise ValueError(f"No HDU with 'mtrans' column found in {tel_path}")
         else:
             raise ValueError(
                 f"Cannot find valid telluric data in {tel_path}. "
