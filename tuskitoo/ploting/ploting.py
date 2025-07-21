@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd 
 import os 
-
+from astropy.io import fits
+from scipy.ndimage import gaussian_filter1d, median_filter
 
 
 def plot_2d(
@@ -102,6 +103,7 @@ def plot_2d(
         ax.set_ylabel("Spacial axis")
         ax.set_xlabel("Spectral axis")
         plt.colorbar(im, ax=ax)
+        print(_vmin,_vmax)
 
         # Mask x-axis region if specified
         if mask_x is not None:
@@ -383,3 +385,111 @@ def plot_spectra(flux_dict,add_error=False,save='',force_pix=False,z_s=None,add_
         plt.close()
     else:
         plt.show()
+
+
+def plot_1d_from_2d(
+    fits_file_path,
+    centers,
+    half_width=4,
+    smoothing_sigma=3.5,
+    median_filter_size=5,
+    vmin=None,
+    vmax=None,
+    interpolation=None,
+    origin=None,
+    title="Image",
+    mask_x=None,
+    mask_y=None,
+    mask_color='gray',
+    mask_alpha=0.9,
+    save="",
+    show_2d=True,
+    xlim=None,
+    ylim=None  
+):
+
+    with fits.open(fits_file_path) as hdul:
+        image_data = hdul[0].data
+        header = hdul[0].header
+
+    # Wavelength axis
+    crpix1 = header.get('CRPIX1', 1)
+    crval1 = header.get('CRVAL1', 0.0)
+    cdelt1 = header.get('CDELT1', 1.0)
+    nx = image_data.shape[1]
+    pixel_indices = np.arange(nx)
+    wavelength = crval1 + (pixel_indices + 1 - crpix1) * cdelt1
+
+    # Color scaling for 2D
+    _vmin = vmin if vmin is not None else np.nanquantile(image_data, 0.05)
+    _vmax = vmax if vmax is not None else np.nanquantile(image_data, 0.95)
+
+    if show_2d:
+        fig, (ax2d, ax1d) = plt.subplots(
+            2, 1,
+            figsize=(20, 10),
+            gridspec_kw={'height_ratios': [7, 2]},
+            constrained_layout=True
+        )
+
+        # 2D image
+        im = ax2d.imshow(
+            image_data,
+            vmin=_vmin,
+            vmax=_vmax,
+            aspect='auto',
+            interpolation=interpolation,
+            origin=origin
+        )
+        ax2d.set_title(title)
+        ax2d.set_ylabel("Spatial axis")
+        ax2d.set_xlabel("Spectral axis")
+        plt.colorbar(im, ax=ax2d)
+
+        if mask_x is not None:
+            ax2d.axvspan(mask_x[0], min(mask_x[1], image_data.shape[1] - 1),
+                         facecolor=mask_color, alpha=mask_alpha)
+        if mask_y is not None:
+            ax2d.axhspan(mask_y[0], min(mask_y[1], image_data.shape[0] - 1),
+                         facecolor=mask_color, alpha=mask_alpha)
+
+    else:
+        fig, ax1d = plt.subplots(
+            1, 1,
+            figsize=(20, 4),
+            constrained_layout=True
+        )
+
+    # Plot 1D spectra using wavelength as x-axis
+    colors = [plt.cm.tab10(i % 10) for i in range(len(centers))]
+
+    for i, center in enumerate(centers):
+        y0 = max(0, center - half_width)
+        y1 = min(image_data.shape[0], center + half_width + 1)
+        if show_2d:
+            ax2d.axhspan(y0, y1, color=colors[i], alpha=0.4)
+
+        region = image_data[y0:y1, :]
+        spectrum = np.median(region, axis=0)
+        filtered = median_filter(spectrum, size=median_filter_size)
+        smoothed = gaussian_filter1d(filtered, sigma=smoothing_sigma)
+
+        ax1d.plot(wavelength, smoothed, label=f"Center {center} ± {half_width}", color=colors[i])
+
+    ax1d.set_xlabel("Wavelength [nm]")
+    ax1d.set_ylabel("Flux (a.u.)")
+    ax1d.set_title("Smoothed 1D Spectrum")
+    ax1d.legend()
+    ax1d.grid(True)
+
+    # Apply optional axis limits
+    if xlim:
+        ax1d.set_xlim(xlim)
+    else:
+        ax1d.set_xlim(wavelength[0], wavelength[-1])
+    if ylim:
+        ax1d.set_ylim(ylim)
+
+    if save:
+        plt.savefig(f"{save}.jpg", dpi=150)
+    plt.show()

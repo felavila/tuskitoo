@@ -60,7 +60,7 @@ class Expectra2D:
                 self.original_data,self.header = self.fits_image[0].data,self.fits_image[0].header
                 #self.original_data = self.fits_image[0].data
         elif isinstance(object,np.ndarray) and len(object.shape)==2:
-            self.object = 'mmm'
+            self.object = object
             print("Object is a numpy array you can also add the Header later")
             self.original_data = np.nan_to_num(self.object,0)
         else:
