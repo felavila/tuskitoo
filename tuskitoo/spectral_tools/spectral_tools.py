@@ -74,7 +74,7 @@ def apply_telluric_correction(path_images: Union[str, List[str]],
         
         # Apply the telluric correction (element-wise division)
         image_data = image_hdulist[0].data
-        corrected_data = image_data / telluric_data[:, None]
+        corrected_data = image_data / telluric_data[None, :]
         
         # Optionally save the corrected file
         if save:
