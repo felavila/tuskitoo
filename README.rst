@@ -25,9 +25,10 @@ sky subtraction, providing researchers with a comprehensive framework to analyze
 Features
 =======
 
-- **Spectral Extraction:** Tools designed to accurately extract spectral data from raw two-dimensional observations.
-- **PCA Sky Subtraction:** Implements Principal Component Analysis techniques to effectively subtract sky background noise, enhancing data quality.
-
+- **Spectral Extraction:** Tools for accurate extraction of spectra from raw two-dimensional observations.
+- **PCA Sky Subtraction:** Uses Principal Component Analysis (PCA) to effectively subtract sky background, improving data quality.
+- **Telluric Correction:** Applies telluric correction to 1D or 2D spectra.
+- **Visualization:** Provides straightforward visualization of both 1D and 2D spectra.
 
 
 Installation
