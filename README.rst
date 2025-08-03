@@ -13,7 +13,7 @@
 Tuskitoo: Two-dim Spectra Kit Tool
 ==================================
 
-|docs| |build| |coverage| |maintainability| |codacy| |tech-debt| |release_version| |wheel| |supported_versions| |commits_since_specific_tag_on_master| |commits_since_latest_github_release| |pypi_stats| |ossf| |ruff| |black| |gh-lic|
+|docs| 
 
 Tuskitoo is a Python 3 package that integrates a range of tools for advanced two-dimensional spectral analysis. Originally developed for X-shooter data, it is flexible enough to be applied to spectra from other instruments as well. The package streamlines the spectral extraction process and implements PCA-based sky subtraction, providing researchers with a comprehensive framework for analyzing complex spectroscopic observations.
 
@@ -43,7 +43,7 @@ Documentation
 =============
 
 The full documentation is available at:  
-`https://python-package-generator.readthedocs.io/en/master/ <https://python-package-generator.readthedocs.io/en/master/>`_
+`https://tuskitoo.readthedocs.io/en/latest/`_
 
 References
 ==========
@@ -65,7 +65,7 @@ License
 
 .. |docs| image:: https://img.shields.io/readthedocs/python-package-generator/master?logo=readthedocs&logoColor=lightblue
     :alt: Read the Docs (version)
-    :target: https://python-package-generator.readthedocs.io/en/master/
+    :target:https://tuskitoo.readthedocs.io/en/latest/
 
 .. |build| image:: https://img.shields.io/github/actions/workflow/status/boromir674/cookiecutter-python-package/test.yaml?link=https%3A%2F%2Fgithub.com%2Fboromir674%2Fcookiecutter-python-package%2Factions%2Fworkflows%2Ftest.yaml%3Fquery%3Dbranch%253Amaster
    :alt: GitHub Workflow Status (with event)
