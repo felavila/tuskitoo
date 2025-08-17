@@ -172,8 +172,8 @@ while i < len(body_lines):
     new_body.append(line)
     i += 1
 
-# 4) Prepend the “Getting Started with SHEAP” heading
-hdr = "Getting Started with qumas\n" + "=" * len("Getting Started with qumas") + "\n\n"
+# 4) Prepend the “Getting Started with tuskitoo heading
+hdr = "Getting Started with tuskitoo\n" + "=" * len("Getting Started with qumas") + "\n\n"
 
 with open("getting_started.rst", "wt") as f:
     f.write(hdr)
@@ -181,31 +181,31 @@ with open("getting_started.rst", "wt") as f:
     
 ######
 
-if not os.path.exists("examples"):
-    os.makedirs("examples")
+# if not os.path.exists("examples"):
+#     os.makedirs("examples")
 
-for src_file in glob.glob("../examples/*.ipynb"):
-    dst_file = os.path.join("examples", src_file.split("/")[-1])
-    shutil.copy(src_file, "examples/")
+# for src_file in glob.glob("../examples/*.ipynb"):
+#     dst_file = os.path.join("examples", src_file.split("/")[-1])
+#     shutil.copy(src_file, "examples/")
 
-# add index file to `examples` path, `:orphan:` is used to
-# tell sphinx that this rst file needs not to be appeared in toctree
-with open("../../examples/index.rst", "rt") as f1:
-    with open("examples/index.rst", "wt") as f2:
-        #f2.write(":orphan:\n\n")
-        f2.write(f1.read())
+# # add index file to `examples` path, `:orphan:` is used to
+# # tell sphinx that this rst file needs not to be appeared in toctree
+# with open("../../examples/index.rst", "rt") as f1:
+#     with open("examples/index.rst", "wt") as f2:
+#         #f2.write(":orphan:\n\n")
+#         f2.write(f1.read())
 
 
-# -- Convert scripts to notebooks #####
-sphinx_gallery_conf = {
-    "examples_dirs": ["../../examples"],
-    "gallery_dirs": ["examples"],
-    # only execute files beginning with plot_
-    "filename_pattern": "/plot_",
-   # "ignore_pattern": "(minipyro|__init__)",
-    # not display Total running time of the script because we do not execute it
-    "min_reported_time": 1,
-}
+# # -- Convert scripts to notebooks #####
+# sphinx_gallery_conf = {
+#     "examples_dirs": ["../../examples"],
+#     "gallery_dirs": ["examples"],
+#     # only execute files beginning with plot_
+#     "filename_pattern": "/plot_",
+#    # "ignore_pattern": "(minipyro|__init__)",
+#     # not display Total running time of the script because we do not execute it
+#     "min_reported_time": 1,
+# }
 ########
 
 html_logo = "_static/tuskitoo.png"
