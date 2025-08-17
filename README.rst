@@ -15,7 +15,7 @@ Tuskitoo: Two-dim Spectra Kit Tool
 Tuskitoo is a Python 3 package that integrates a range of tools for advanced two-dimensional spectral analysis. Originally developed for X-shooter data, it is flexible enough to be applied to spectra from other instruments as well. The package streamlines the spectral extraction process and implements PCA-based sky subtraction, providing researchers with a comprehensive framework for analyzing complex spectroscopic observations.
 
 Features
-=======
+============
 
 - **Spectral Extraction:** Tools for accurate extraction of spectra from raw two-dimensional observations.
 - **PCA Sky Subtraction:** Uses Principal Component Analysis (PCA) to effectively subtract sky background, improving data quality.
@@ -24,7 +24,7 @@ Features
 
 
 Installation
-=======
+============
 .. . old Tudspek name 
 Install  Tuskitoo locally using the following command:
 
@@ -33,12 +33,12 @@ Install  Tuskitoo locally using the following command:
     pip install -e .
 
 Prerequisites
-=============
+============
 
 You need to have Python == 3.10 installed .
 
 References
-=======
+============
 
 Tuskitoo is based on methodologies presented in the following paper(s):
 
@@ -48,7 +48,7 @@ Available at: ADS Abstract <https://ui.adsabs.harvard.edu/abs/2021A%26A...656A.1
 
 
 License
-=======
+============
 
 |gh-lic|
 
@@ -56,7 +56,7 @@ License
 
 
 License
-=======
+============
 
 * Free software: GNU Affero General Public License v3.0
 
