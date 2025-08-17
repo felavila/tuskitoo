@@ -9,9 +9,11 @@
 
     </div>
 
-=======
+
 Tuskitoo: Two-dim Spectra Kit Tool
-=======
+=========================================================
+
+
 .. .https://python-package-generator.readthedocs.io/en/master/
 .. .| |build| |coverage| |docs| |maintainability| |codacy| |tech-debt|
 .. .| |release_version| |wheel| |supported_versions| |commits_since_specific_tag_on_master| |commits_since_latest_github_release|
