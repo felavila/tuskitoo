@@ -10,7 +10,7 @@ build-backend = "poetry.core.masonry.api"
 ## Also renders on pypi as 'subtitle'
 [tool.poetry]
 name = "tuskitoo"
-version = "0.1.3"
+version = "0.1.0"
 description = "tuskitoo: Two-dim Spectra Kit Tool"
 authors = ["Felipe Avila-Vera <felipe.avilav@postgrado.uv.cl>"]
 maintainers = ["Felipe Avila-Vera <felipe.avilav@postgrado.uv.cl>"]
