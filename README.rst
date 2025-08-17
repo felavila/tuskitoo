@@ -1,4 +1,4 @@
-.. image:: https://raw.githubusercontent.com/felavila/tuskitoo/v0.1.1/docs/source/_static/tuskitoo.png
+.. image:: https://raw.githubusercontent.com/felavila/tuskitoo/main/docs/source/_static/tuskitoo.png
    :alt: qumas Logo
    :align: left
    :width: 400
