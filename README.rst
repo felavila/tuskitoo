@@ -32,12 +32,6 @@ Install  Tuskitoo locally using the following command:
     
     pip install -e .
 
-Documentation
-=============
-
-The full documentation is available at:  
-https://tuskitoo.readthedocs.io/en/latest/
-
 Prerequisites
 =============
 
