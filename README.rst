@@ -1,14 +1,7 @@
-.. raw:: html
-
-    <div style="text-align: center">
-
-.. image:: https://raw.githubusercontent.com/felavila/tuskitoo/v0.1.0/docs/source/_static/tuskitoo.png
+.. image:: https://raw.githubusercontent.com/felavila/tuskitoo/v0.1.1/docs/source/_static/tuskitoo.png
    :alt: qumas Logo
    :align: left
    :width: 400
-
-    </div>
-
 
 Tuskitoo: Two-dim Spectra Kit Tool
 =========================================================
