@@ -47,12 +47,12 @@ Astronomy & Astrophysics, Volume 656, id.A108, 10 pp.**
 Available at: ADS Abstract <https://ui.adsabs.harvard.edu/abs/2021A%26A...656A.108M/abstract>_  
 
 
-License
-============
+.. License
+.. ============
 
-|gh-lic|
+.. |gh-lic|
 
-* GNU Affero General Public License v3.0_
+.. * GNU Affero General Public License v3.0_
 
 
 License
