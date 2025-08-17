@@ -3,22 +3,9 @@
    :align: left
    :width: 400
 
-.. |pypi| image:: https://img.shields.io/pypi/v/tuskitoo?label=pypi%20package
-   :alt: PyPI package
-   :target: https://pypi.org/project/tuskitoo/
-
-.. |docs| image:: https://img.shields.io/readthedocs/tuskitoo?label=docs
-   :alt: Read the Docs
-   :target: https://tuskitoo.readthedocs.io/en/latest/
-
-.. |build| image:: https://github.com/felavila/tuskitoo/actions/workflows/python-package.yml/badge.svg?branch=main
-   :alt: Build status
-   :target: https://github.com/felavila/tuskitoo/actions/workflows/python-package.yml
-
-
 Tuskitoo: Two-dim Spectra Kit Tool
 ==================================
-|pypi| |docs| |build|
+
 
 Tuskitoo (Two-dim Spectra Kit Tool) is a Python 3 package that integrates a range of tools for advanced two-dimensional spectral analysis. Originally developed for X-shooter data, it is flexible enough to be applied to spectra from other instruments as well. The package streamlines the spectral extraction process and implements PCA-based sky subtraction, providing a comprehensive framework for analyzing complex spectroscopic observations.
 
