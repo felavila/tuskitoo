@@ -54,7 +54,7 @@ extensions = [
 #     extensions.append("nbsphinx")
 # except Exception:
 #     print("nbsphinx not available; skipping notebook rendering")
-master_doc = "index.rst"      
+    
 # try:
 #     import myst_nb
 #     extensions.append("myst_nb")
@@ -119,7 +119,7 @@ add_module_names = False
 
 nbsphinx_execute = "never"
 language = "en"
-
+master_doc = "index"
 # For the getting started ##
 
 # with open("../README.rst", "rt") as f:
@@ -192,7 +192,7 @@ hdr = "Getting Started with tuskitoo\n" + "=" * len("Getting Started with qumas"
 with open("getting_started.rst", "wt") as f:
     f.write(hdr)
     f.write("".join(new_body))
-
+    
 ######
 
 # if not os.path.exists("examples"):
