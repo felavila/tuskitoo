@@ -1,6 +1,6 @@
 :github_url: https://github.com/felavila/tuskitoo
 
-tuskitoo documentation
+Welcome to tuskitoo documentation
 ======================
 
 .. include:: getting_started.rst

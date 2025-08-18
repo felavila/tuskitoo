@@ -104,11 +104,12 @@ templates_path   = ['_templates']
 
 html_theme      = 'sphinx_rtd_theme'
 # html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-# html_theme_options = {
-#     'collapse_navigation': False,
-#     'navigation_depth':     4,
-#     'sticky_navigation':    True,
-# }
+
+html_theme_options = {
+    "collapse_navigation": False,
+    "navigation_depth": 4,
+    "includehidden": True,  # <- key: show hidden toctrees from other pages
+}
 
 html_static_path = ['_static']
 html_css_files = [
