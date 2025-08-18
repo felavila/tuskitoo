@@ -119,7 +119,7 @@ add_module_names = False
 
 nbsphinx_execute = "never"
 language = "en"
-master_doc = "index"
+master_doc = "getting_started"
 # For the getting started ##
 
 # with open("../README.rst", "rt") as f:
