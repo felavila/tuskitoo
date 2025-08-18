@@ -119,7 +119,7 @@ add_module_names = False
 
 nbsphinx_execute = "never"
 language = "en"
-master_doc = "getting_started"
+
 # For the getting started ##
 
 # with open("../README.rst", "rt") as f:
@@ -192,7 +192,7 @@ hdr = "Getting Started with tuskitoo\n" + "=" * len("Getting Started with qumas"
 with open("getting_started.rst", "wt") as f:
     f.write(hdr)
     f.write("".join(new_body))
-    
+master_doc = "getting_started"   
 ######
 
 # if not os.path.exists("examples"):
