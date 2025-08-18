@@ -3,7 +3,7 @@
 tuskitoo documentation
 =====================
 
-.. include:: getting_started.rst
+.. include:: getting_started
 
 .. toctree::
    :maxdepth: 2
