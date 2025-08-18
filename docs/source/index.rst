@@ -3,6 +3,8 @@
 tuskitoo documentation
 =====================
 
+.. include:: getting_started.rst
+
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started 
