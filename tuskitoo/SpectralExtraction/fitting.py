@@ -6,6 +6,7 @@ from parallelbar import progress_imap, progress_map, progress_imapu
 from parallelbar.tools import cpu_bench, fibonacci
 import numpy as np
 from copy import deepcopy
+from functools import partial
 
 def make_fit(ydata:np.array,num_source=2,initial_center=None,initial_separation=None
                  ,bound_sigma=None,fix_sep=None,fix_height=None,custom_expr=None
@@ -92,6 +93,29 @@ def make_fit(ydata:np.array,num_source=2,initial_center=None,initial_separation=
         print(f"Model parameters {params}")
     return result
 
+
+def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num):
+    n_pixel, pixel, pixel_weight = args
+
+    # NaN check fix: (pixel == np.nan) is always False
+    if np.all(pixel == 0) or np.all(np.isnan(pixel)):
+        return ([0] * (parameter_number * num_source)
+                + [1e15] * (parameter_number * num_source)
+                + [np.nan] * (parameter_number * num_source)
+                + [1e15, 1e15, 1e15, 1e15, 1e15, n_pixel, x_num])
+
+    fiting = make_fit(pixel, num_source=num_source, weights=pixel_weight, **kwargs)
+    if not np.all(fiting.covar):
+        return ([0] * (parameter_number * num_source)
+                + [1e15] * (parameter_number * num_source)
+                + list(fiting.values.keys())
+                + [1e15, 1e15, 1e15, 1e15, 1e15, n_pixel, x_num])
+
+    return (list(np.array([[v.value, v.stderr] for k, v in fiting.params.items()])
+                 .T.reshape(parameter_number * num_source * 2,))
+            + list(fiting.values.keys())
+            + [fiting.chisqr, fiting.redchi, fiting.aic, fiting.bic, fiting.rsquared,
+               n_pixel, x_num])
 
 
 
@@ -180,20 +204,26 @@ def parallel_fit(image,error,num_source,pixel_limit=None,n_cpu=None,mask_list=[]
     norm_factor[norm_factor == 0] = 1
     normalized_image = np.nan_to_num(proc_image / norm_factor)
     normalized_weight = np.nan_to_num(weight / norm_factor)
-    global process_pixel
-    def process_pixel(args):
-        n_pixel, pixel,pixel_weight = args
+    #global process_pixel
+    #def process_pixel(args):
+    #    n_pixel, pixel,pixel_weight = args
         #if i want to add a parameter for the stats part of the matrix always should be and the left of it
-        if np.all(pixel== 0) or  np.all(pixel== np.nan):
-            return list([0]*parameter_number*num_source)+[1e15]*parameter_number*num_source+ list([np.nan]*parameter_number*num_source)+[1e15,1e15,1e15,1e15,1e15,n_pixel,x_num] 
-        fiting =  make_fit(pixel, num_source=num_source,weights=pixel_weight,**kwargs)
-        if not np.all(fiting.covar):
-            return list([0]*parameter_number*num_source)+[1e15]*parameter_number*num_source+ list(fiting.values.keys())+[1e15,1e15,1e15,1e15,1e15,n_pixel,x_num] 
-        return list(np.array([[value.value,value.stderr] for key,value in fiting.params.items()]).T.reshape(parameter_number*num_source*2,))+ list(fiting.values.keys()) + [fiting.chisqr,fiting.redchi,fiting.aic,fiting.bic,fiting.rsquared,n_pixel,x_num] 
+    #    if np.all(pixel== 0) or  np.all(pixel== np.nan):
+    #        return list([0]*parameter_number*num_source)+[1e15]*parameter_number*num_source+ list([np.nan]*parameter_number*num_source)+[1e15,1e15,1e15,1e15,1e15,n_pixel,x_num] 
+    #    fiting =  make_fit(pixel, num_source=num_source,weights=pixel_weight,**kwargs)
+    #    if not np.all(fiting.covar):
+    #        return list([0]*parameter_number*num_source)+[1e15]*parameter_number*num_source+ list(fiting.values.keys())+[1e15,1e15,1e15,1e15,1e15,n_pixel,x_num] 
+    #    return list(np.array([[value.value,value.stderr] for key,value in fiting.params.items()]).T.reshape(parameter_number*num_source*2,))+ list(fiting.values.keys()) + [fiting.chisqr,fiting.redchi,fiting.aic,fiting.bic,fiting.rsquared,n_pixel,x_num] 
+    kwargs = dict(kwargs)  # avoid mutating caller's dict
+    worker = partial(_process_pixel,
+                    parameter_number=parameter_number,
+                    num_source=num_source,
+                    kwargs=kwargs,
+                    x_num=x_num)
     print(f"The code will be executed in {n_cpu} core using {num_source} sources an a {distribution} distribution")
     args = [(n_pixel, pixel,pixel_weight) for n_pixel, pixel,pixel_weight in zip(np.arange(*pixel_limit) ,normalized_image.T,normalized_weight.T)]
     normalize_matrix = norm_factor[:,np.newaxis]
-    full_fit = np.array(progress_map(process_pixel, args, process_timeout=20, n_cpu=n_cpu,need_serialize=False))
+    full_fit = np.array(progress_map(worker, args, process_timeout=20, context='spawn', n_cpu=n_cpu,need_serialize=False))  # Windows = spawn, Linux = fork, macOS often spawn)
     results = full_fit[:,0:parameter_number*num_source].astype(float)
     errors = full_fit[:,parameter_number*num_source:2*parameter_number*num_source].astype(float)
     name_params = full_fit[:,2*parameter_number*num_source:-7]

@@ -570,9 +570,11 @@ class Expectra2D:
         Plot the 2D cut-out image and the stacked median profile.
         """
         norm_image = self.cut_data/self.cut_data.max(axis=0)
+        vmin, vmax = np.nanpercentile(self.cut_data, [5, 95])
         fig,axs = plt.subplots(1, 2, figsize=(18, 5))
         # Plot data on the first subplot
-        im = axs[0].imshow(norm_image,aspect="auto",vmin=0,vmax=1)
+        #im = axs[0].imshow(norm_image,aspect="auto",vmin=0,vmax=1)
+        im = axs[0].imshow(self.cut_data,aspect="auto",vmin=vmin,vmax=vmax)
         axs[0].set_title('2d cut')
         axs[0].set_xlabel('X-pixel')
         axs[0].set_ylabel('Y-pixel')

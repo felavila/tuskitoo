@@ -493,3 +493,79 @@ def plot_1d_from_2d(
     if save:
         plt.savefig(f"{save}.jpg", dpi=150)
     plt.show()
+
+
+## alejandramelo hizo esto 04.09.2025
+def compare_two_spectra(
+    fits_a, center_a,
+    fits_b, center_b,
+    half_width=4,
+    label_a=None,
+    label_b=None,
+    xlim=None,
+    ylim=None,
+    median_filter_size=1,
+    smoothing_sigma=0,
+    save=""
+):
+    """Extract and plot two 1D spectra from 2D FITS files.
+    Allows optional median filtering and Gaussian smoothing."""
+
+    def extract(fits_file, center, half_width):
+        with fits.open(fits_file) as hdul:
+            data = hdul[0].data
+            header = hdul[0].header
+
+        # wavelength axis
+        crpix1 = header.get("CRPIX1", 1)
+        crval1 = header.get("CRVAL1", 0.0)
+        cdelt1 = header.get("CDELT1", 1.0)
+        nx = data.shape[1]
+        pix = np.arange(nx)
+        wavelength = crval1 + (pix + 1 - crpix1) * cdelt1
+
+        # spatial extraction
+        y0 = max(0, int(center - half_width))
+        y1 = min(data.shape[0], int(center + half_width) + 1)
+        region = data[y0:y1, :]
+        spectrum = np.nanmedian(region, axis=0)
+
+        # optional smoothing
+        if median_filter_size > 1:
+            spectrum = median_filter(spectrum, size=median_filter_size)
+        if smoothing_sigma > 0:
+            spectrum = gaussian_filter1d(spectrum, sigma=smoothing_sigma)
+
+        return wavelength, spectrum
+
+    # Extract both
+    w1, s1 = extract(fits_a, center_a, half_width)
+    w2, s2 = extract(fits_b, center_b, half_width)
+
+    # Labels
+    if label_a is None:
+        label_a = os.path.basename(fits_a)
+    if label_b is None:
+        label_b = os.path.basename(fits_b)
+
+    # Plot
+    plt.figure(figsize=(16, 5))
+    plt.plot(w1, s1, label=label_a, lw=1.5)
+    plt.plot(w2, s2, label=label_b, lw=1.5)
+    plt.xlabel("Wavelength")
+    plt.ylabel("Flux (a.u.)")
+    plt.title("Comparison of 1D Spectra")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    if xlim:
+        plt.xlim(xlim)
+    if ylim:
+        plt.ylim(ylim)
+
+    if save:
+        plt.savefig(f"{save}.jpg", dpi=150, bbox_inches="tight")
+    plt.show()
+
+
+
