@@ -20,16 +20,26 @@ Features
 Installation
 ============
 
+Create a conda env with Python == 3.10
+
+.. code-block:: shell
+
+conda create -n tuskitoo python=3.10 -y
+
+.. code-block:: shell
+
+conda activate tuskitoo
+
 Install Tuskitoo locally using the following command:
 
 .. code-block:: shell
 
    pip install -e .
 
-Prerequisites
-=============
+# Prerequisites
+# =============
 
-You need to have Python == 3.10 installed.
+# You need to have Python == 3.10 installed.
 
 References
 ==========
