@@ -93,18 +93,27 @@ def make_fit(ydata:np.array,num_source=2,initial_center=None,initial_separation=
         print(f"Model parameters {params}")
     return result
 
+def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num, init_center_arr=None, init_sep_arr=None):
+    col_idx, n_pixel, pixel, pixel_weight = args
 
-def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num):
-    n_pixel, pixel, pixel_weight = args
-
-    # NaN check fix: (pixel == np.nan) is always False
     if np.all(pixel == 0) or np.all(np.isnan(pixel)):
         return ([0] * (parameter_number * num_source)
                 + [1e15] * (parameter_number * num_source)
                 + [np.nan] * (parameter_number * num_source)
                 + [1e15, 1e15, 1e15, 1e15, 1e15, n_pixel, x_num])
 
-    fiting = make_fit(pixel, num_source=num_source, weights=pixel_weight, **kwargs)
+    kwargs_local = dict(kwargs)
+
+    # --- apply per-column initial center, if provided ---
+    if init_center_arr is not None:
+        kwargs_local["initial_center"] = float(init_center_arr[col_idx])
+
+    # --- apply per-column separation ONLY if num_source>1 and init_sep_arr exists ---
+    if num_source > 1 and init_sep_arr is not None:
+        kwargs_local["initial_separation"] = init_sep_arr[col_idx]
+
+    fiting = make_fit(pixel, num_source=num_source, weights=pixel_weight, **kwargs_local)
+
     if not np.all(fiting.covar):
         return ([0] * (parameter_number * num_source)
                 + [1e15] * (parameter_number * num_source)
@@ -116,6 +125,31 @@ def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num):
             + list(fiting.values.keys())
             + [fiting.chisqr, fiting.redchi, fiting.aic, fiting.bic, fiting.rsquared,
                n_pixel, x_num])
+
+
+
+#def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num):
+#    n_pixel, pixel, pixel_weight = args
+#
+    # NaN check fix: (pixel == np.nan) is always False
+#    if np.all(pixel == 0) or np.all(np.isnan(pixel)):
+#        return ([0] * (parameter_number * num_source)
+#                + [1e15] * (parameter_number * num_source)
+#                + [np.nan] * (parameter_number * num_source)
+#                + [1e15, 1e15, 1e15, 1e15, 1e15, n_pixel, x_num])
+#
+#    fiting = make_fit(pixel, num_source=num_source, weights=pixel_weight, **kwargs)
+#    if not np.all(fiting.covar):
+#        return ([0] * (parameter_number * num_source)
+#                + [1e15] * (parameter_number * num_source)
+#                + list(fiting.values.keys())
+#                + [1e15, 1e15, 1e15, 1e15, 1e15, n_pixel, x_num])
+#
+#    return (list(np.array([[v.value, v.stderr] for k, v in fiting.params.items()])
+#                 .T.reshape(parameter_number * num_source * 2,))
+#            + list(fiting.values.keys())
+#            + [fiting.chisqr, fiting.redchi, fiting.aic, fiting.bic, fiting.rsquared,
+#               n_pixel, x_num])
 
 
 
@@ -215,15 +249,46 @@ def parallel_fit(image,error,num_source,pixel_limit=None,n_cpu=None,mask_list=[]
     #        return list([0]*parameter_number*num_source)+[1e15]*parameter_number*num_source+ list(fiting.values.keys())+[1e15,1e15,1e15,1e15,1e15,n_pixel,x_num] 
     #    return list(np.array([[value.value,value.stderr] for key,value in fiting.params.items()]).T.reshape(parameter_number*num_source*2,))+ list(fiting.values.keys()) + [fiting.chisqr,fiting.redchi,fiting.aic,fiting.bic,fiting.rsquared,n_pixel,x_num] 
     kwargs = dict(kwargs)  # avoid mutating caller's dict
-    worker = partial(_process_pixel,
-                    parameter_number=parameter_number,
-                    num_source=num_source,
-                    kwargs=kwargs,
-                    x_num=x_num)
+    kwargs["pixel_limit"] = pixel_limit
+
+    init_center_arr = kwargs.pop("initial_center", None)
+    init_sep_arr = kwargs.pop("initial_separation", None)  # optional future extension
+
+    # normalize init_center_arr to array if user gave list/np.ndarray
+    if init_center_arr is not None and not np.isscalar(init_center_arr):
+        init_center_arr = np.asarray(init_center_arr, dtype=float)
+    else:
+        # if scalar, keep legacy scalar behavior by putting back into kwargs
+        if init_center_arr is not None:
+            kwargs["initial_center"] = float(init_center_arr)
+        init_center_arr = None
+
+    # same for separations: we keep legacy if scalar/list length != nx; only use per-pixel if it's an array of lists
+    # (for now, Expectra2D sends one list for all columns, so keep it legacy)
+    if init_sep_arr is not None and isinstance(init_sep_arr, list) and (len(init_sep_arr) > 0) and np.isscalar(init_sep_arr[0]):
+        kwargs["initial_separation"] = init_sep_arr
+        init_sep_arr = None
+
+    worker = partial(
+        _process_pixel,
+        parameter_number=parameter_number,
+        num_source=num_source,
+        kwargs=kwargs,
+        x_num=x_num,
+        init_center_arr=init_center_arr,
+        init_sep_arr=init_sep_arr
+    )    
+
+    #worker = partial(_process_pixel,
+    #                parameter_number=parameter_number,
+    #                num_source=num_source,
+    #                kwargs=kwargs,
+    #                x_num=x_num)
     print(f"The code will be executed in {n_cpu} core using {num_source} sources an a {distribution} distribution")
     args = [(n_pixel, pixel,pixel_weight) for n_pixel, pixel,pixel_weight in zip(np.arange(*pixel_limit) ,normalized_image.T,normalized_weight.T)]
     normalize_matrix = norm_factor[:,np.newaxis]
     full_fit = np.array(progress_map(worker, args, process_timeout=20, context='spawn', n_cpu=n_cpu,need_serialize=False))  # Windows = spawn, Linux = fork, macOS often spawn)
+    
     results = full_fit[:,0:parameter_number*num_source].astype(float)
     errors = full_fit[:,parameter_number*num_source:2*parameter_number*num_source].astype(float)
     name_params = full_fit[:,2*parameter_number*num_source:-7]

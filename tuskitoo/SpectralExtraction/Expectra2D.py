@@ -96,6 +96,7 @@ class Expectra2D:
         ------
         If no header is available, a warning is issued.
         """
+
         if not self.header:   
             warnings.warn(
                 "Warning: 'self.header' is not defined. "
@@ -103,9 +104,43 @@ class Expectra2D:
                 UserWarning
             )
             return
-        self.relevant_keywords_header = {i:self.header[i] for i in ["ORIGIN","INSTRUME","OBJECT","NAXIS1","CRVAL1","CD1_1","CUNIT1","BUNIT","CD2_2","OBJECT","ESO SEQ ARM"] if i in list(self.header.keys()) }
-        self.name = self.relevant_keywords_header["OBJECT"]
-        self.band = self.relevant_keywords_header["ESO SEQ ARM"]
+
+        self.relevant_keywords_header = {
+            i: self.header[i]
+            for i in ["ORIGIN","INSTRUME","OBJECT","NAXIS1","CRVAL1","CD1_1","CUNIT1","BUNIT","CD2_2","OBJECT","ESO SEQ ARM"]
+            if i in list(self.header.keys())
+        }
+
+        # SAFE: OBJECT might also be missing in some products
+        self.name = self.relevant_keywords_header.get("OBJECT", self.name)
+
+        # SAFE: ESO-only keyword
+        if "ESO SEQ ARM" in self.relevant_keywords_header:
+            self.band = self.relevant_keywords_header["ESO SEQ ARM"]
+        else:
+            # Non-ESO fallback (e.g. GTC)
+            self.band = (
+                self.band
+                or self.header.get("ARM")
+                or self.header.get("GRISM")
+                or self.header.get("GRATING")
+                or self.header.get("DISPERSR")
+                or self.header.get("FILTER")
+                or self.header.get("INSTRUME")
+                or "UNKNOWN"
+            )
+        
+
+        #if not self.header:   
+        #    warnings.warn(
+        #        "Warning: 'self.header' is not defined. "
+        #        "Please add a header to the class to take extra advantage of the code.",
+        #        UserWarning
+        #    )
+        #    return
+        #self.relevant_keywords_header = {i:self.header[i] for i in ["ORIGIN","INSTRUME","OBJECT","NAXIS1","CRVAL1","CD1_1","CUNIT1","BUNIT","CD2_2","OBJECT","ESO SEQ ARM"] if i in list(self.header.keys()) }
+        #self.name = self.relevant_keywords_header["OBJECT"]
+        #self.band = self.relevant_keywords_header["ESO SEQ ARM"]
         #if self.relevant_keywords_header["CUNIT1"]=="nm": to_angs=10
         #self.original_wavelength =  np.array([(self.relevant_keywords_header["CRVAL1"]+i*self.relevant_keywords_header["CD1_1"])*10 for i in self.original_data.shape[1]])
         #calculate wavelenght here for example  
@@ -200,6 +235,9 @@ class Expectra2D:
         print("initial_center:",initial_center,"initial_separation:",initial_separation)
         if isinstance(initial_separation,(float,int)):
             initial_separation = [initial_separation]
+
+        mask_list = []
+
         band = kwargs.get("band",self.band)
         if band == "NIR":
             mask_list=[[5800,7005],[13500,15900]] #teluric
@@ -294,7 +332,8 @@ class Expectra2D:
         #result_panda[['std_'+i for i in flux_columns]] = errors.T
         #TODO what happend if it is not difine? i should ask for it?
         result_panda['wavelength'] =  np.array([(self.relevant_keywords_header["CRVAL1"]+i*self.relevant_keywords_header["CD1_1"])*10 for i in result_panda['n_pixel'].values])
-        result_panda['units_flux'] = len(result_panda) * [self.relevant_keywords_header["BUNIT"]]
+        #result_panda['units_flux'] = len(result_panda) * [self.relevant_keywords_header["BUNIT"]]
+        result_panda['units_flux'] = len(result_panda) * [self.relevant_keywords_header.get("BUNIT", "flux")]
         if len(images) > 0:
             if len(images) == num_source:
                 print(f'setting names of images {np.arange(1, num_source+1).astype(str).tolist()} to {images}')
@@ -626,3 +665,299 @@ class Expectra2D:
         if verbose:
             print(f"cut center {center} and cut size {size}")
         return image[int(center-size//2):int(center+size//2),:]
+    
+
+
+    def plot_slices_overlay(self, x_step=25, x_min=0, x_max=None,
+                            normalize=True, subtract_bg=True, bg_percentile=10,
+                            alpha=0.35, show_trace_centroid=True, threshold_frac=0.25,
+                            vmin=None, vmax=None,
+                            show_x_lines=True, x_line_alpha=0.35, x_line_lw=1.5,
+                            cmap_name="viridis"):
+        """
+        Plot the 2D cut-out and overlay many spatial profiles (y-slices) for different x columns.
+        Optionally draw vertical lines on the 2D image at each sampled x, with matching colors.
+        """
+
+        data = self.cut_data
+        ny, nx = data.shape
+        if x_max is None:
+            x_max = nx
+
+        fig, (ax_img, ax_prof) = plt.subplots(
+            2, 1, figsize=(14, 9),
+            gridspec_kw={"height_ratios": [2.0, 1.0]},
+            sharex=False
+        )
+
+        # --- 2D image scaling ---
+        if vmin is None or vmax is None:
+            vmin_, vmax_ = np.nanpercentile(data, [5, 95])
+            if vmin is None:
+                vmin = vmin_
+            if vmax is None:
+                vmax = vmax_
+
+        im = ax_img.imshow(data, aspect="auto", vmin=vmin, vmax=vmax)
+        ax_img.set_title("2D cut")
+        ax_img.set_xlabel("X (dispersion pixel)")
+        ax_img.set_ylabel("Y (spatial pixel)")
+        fig.colorbar(im, ax=ax_img, label="intensity")
+
+        ys = np.arange(ny)
+
+        # x positions we will sample
+        x_list = list(range(int(x_min), int(x_max), int(x_step)))
+        n_lines = len(x_list)
+
+        # colormap to assign a unique color to each x slice
+        cmap = plt.get_cmap(cmap_name)
+        colors = [cmap(i / max(n_lines - 1, 1)) for i in range(n_lines)]
+
+        xs_cent, y0s = [], []
+
+        for idx, x in enumerate(x_list):
+            prof = data[:, x].astype(float)
+
+            if subtract_bg:
+                prof = prof - np.nanpercentile(prof, bg_percentile)
+
+            m = np.nanmax(prof)
+            if not np.isfinite(m) or m <= 0:
+                continue
+
+            prof_plot = (prof / m) if normalize else prof
+
+            # plot profile with matching color
+            ax_prof.plot(ys, prof_plot, alpha=alpha, color=colors[idx])
+
+            # draw vertical line at that x in same color
+            if show_x_lines:
+                ax_img.axvline(x, color=colors[idx], alpha=x_line_alpha, lw=x_line_lw)
+
+            # centroid trace
+            if show_trace_centroid:
+                mask = prof > (threshold_frac * m)
+                if mask.sum() >= 3:
+                    w = prof[mask]
+                    y = ys[mask]
+                    y0 = np.sum(y * w) / np.sum(w)
+                    xs_cent.append(x)
+                    y0s.append(y0)
+
+        ax_prof.set_title(f"Spatial profiles (step={x_step})")
+        ax_prof.set_xlabel("Y (spatial pixel)")
+        ax_prof.set_ylabel("Normalized flux" if normalize else "Flux")
+        ax_prof.grid(alpha=0.2)
+
+        if show_trace_centroid and len(xs_cent) > 0:
+            ax_img.plot(xs_cent, y0s, lw=2, label="centroid trace")
+            ax_img.legend(loc="best")
+
+        plt.tight_layout()
+        plt.show()
+
+        if show_trace_centroid:
+            return np.array(xs_cent), np.array(y0s)
+        return None
+
+
+    def run_parallel_fit_trace(
+        self,
+        n_picks=1,
+        pixel_limit=None,                 # [x_min, x_max] in DISPERSION pixels (within cut_data)
+        bound_sigma=[2],
+        distribution="gaussian",
+        param_value=None,
+        param_limit=None,
+        param_fix=None,
+        no_use_real_error=False,
+        # --- trace settings ---
+        trace_bg_percentile=10,
+        trace_threshold_frac=0.25,
+        trace_smooth=31,                  # odd window for median smoothing; set 0/1 to disable
+        trace_min_valid_frac=0.2,         # minimum fraction of columns that must have valid centroid
+        # --- optional: use peak guessing around trace for separations ---
+        guess_separation_from_peaks=True,
+        peak_window=10,                   # +/- pixels around trace to look for peaks
+        initial_separation=None,          # if provided, overrides guessing
+        initial_center=None,              # if provided, overrides trace (scalar)
+        **kwargs
+    ):
+        """
+        Trace-guided version of run_parallel_fit (Option B).
+
+        Key idea:
+        - Compute a centroid trace y0(x) on the 2D cutout
+        - Use y0(x) as per-column initial_center for the fitter
+        - Optionally guess initial separations from peaks within a window around the trace
+
+        IMPORTANT:
+        - Requires patch in fitting.py so parallel_fit can accept initial_center as an array.
+        """
+
+        # ---- make sure pixel_limit does NOT leak via kwargs ----
+        kwargs.pop("pixel_limit", None)
+
+        data = self.cut_data
+        error = self.cut_error if not no_use_real_error else np.ones_like(self.cut_data)
+
+        ny, nx = data.shape
+
+        # --- pixel_limit handling ---
+        if pixel_limit is None or pixel_limit == []:
+            x_min, x_max = 0, nx
+        else:
+            x_min, x_max = int(pixel_limit[0]), int(pixel_limit[1])
+            x_min = max(0, x_min)
+            x_max = min(nx, x_max)
+
+        # --- if user passed a scalar center, keep behavior but expand to array ---
+        if initial_center is not None:
+            init_center_arr = np.full(nx, float(initial_center), dtype=float)
+        else:
+            # --- compute trace y0(x) ---
+            ys = np.arange(ny, dtype=float)
+            y0 = np.full(nx, np.nan, dtype=float)
+
+            for x in range(x_min, x_max):
+                prof = data[:, x].astype(float)
+
+                # background subtract
+                bg = np.nanpercentile(prof, trace_bg_percentile)
+                prof = prof - bg
+
+                m = np.nanmax(prof)
+                if not np.isfinite(m) or m <= 0:
+                    continue
+
+                thr = trace_threshold_frac * m
+                mask = prof > thr
+                if np.count_nonzero(mask) < 3:
+                    continue
+
+                w = prof[mask]
+                yy = ys[mask]
+                y0[x] = np.sum(yy * w) / np.sum(w)
+
+            # Interpolate missing y0 inside [x_min, x_max)
+            xs = np.arange(nx)
+            good = np.isfinite(y0)
+            good_in_range = good & (xs >= x_min) & (xs < x_max)
+
+            if np.count_nonzero(good_in_range) < trace_min_valid_frac * max(1, (x_max - x_min)):
+                raise RuntimeError(
+                    "Trace extraction failed: too few valid centroid columns. "
+                    "Try lowering trace_threshold_frac, increasing size_cut, or adjusting bg_percentile."
+                )
+
+            # linear interpolation over valid range
+            y0_interp = y0.copy()
+            xr = xs[(xs >= x_min) & (xs < x_max)]
+            good_x = xs[good_in_range]
+            good_y = y0[good_in_range]
+            y0_interp[(xs >= x_min) & (xs < x_max)] = np.interp(xr, good_x, good_y)
+
+            # optional smoothing (median filter)
+            if trace_smooth and trace_smooth > 1:
+                wwin = int(trace_smooth)
+                if wwin % 2 == 0:
+                    wwin += 1
+                half = wwin // 2
+                y0_smooth = y0_interp.copy()
+                for x in range(x_min, x_max):
+                    lo = max(x_min, x - half)
+                    hi = min(x_max, x + half + 1)
+                    y0_smooth[x] = np.nanmedian(y0_interp[lo:hi])
+                y0_interp = y0_smooth
+
+            init_center_arr = y0_interp
+
+        # --- initial_separation logic ---
+        if n_picks > 1:
+            if initial_separation is not None:
+                init_sep = initial_separation
+            else:
+                if guess_separation_from_peaks:
+                    seps = []
+                    for x in range(x_min, x_max, 5):
+                        yc = init_center_arr[x]
+                        if not np.isfinite(yc):
+                            continue
+                        ylo = int(max(0, np.floor(yc - peak_window)))
+                        yhi = int(min(ny, np.ceil(yc + peak_window + 1)))
+                        prof = data[ylo:yhi, x].astype(float)
+
+                        prof = prof - np.nanpercentile(prof, trace_bg_percentile)
+                        if not np.isfinite(np.nanmax(prof)) or np.nanmax(prof) <= 0:
+                            continue
+
+                        pk = guess_picks_image(prof, n_picks)
+                        if pk is None or len(pk) < n_picks:
+                            continue
+
+                        pk_abs = np.array(pk) + ylo
+                        order = np.argsort(np.abs(pk_abs - yc))
+                        pk_abs = pk_abs[order]
+                        sep = pk_abs[1] - pk_abs[0]
+                        if np.isfinite(sep):
+                            seps.append(sep)
+
+                    if len(seps) == 0:
+                        picks = np.array([guess_picks_image(col, n_picks) for col in self.cut_data.T])
+                        ref_center = np.nanmedian(picks[:, 0])
+                        init_sep = (np.nanmedian(picks, axis=0)[1:] - ref_center).tolist()
+                    else:
+                        init_sep = [float(np.nanmedian(seps))]
+                else:
+                    picks = np.array([guess_picks_image(col, n_picks) for col in self.cut_data.T])
+                    ref_center = np.nanmedian(picks[:, 0])
+                    init_sep = (np.nanmedian(picks, axis=0)[1:] - ref_center).tolist()
+
+            if isinstance(init_sep, (float, int)):
+                init_sep = [init_sep]
+        else:
+            init_sep = []
+
+        # --- masks based on band (same logic as your run_parallel_fit) ---
+        mask_list = []
+        band = kwargs.get("band", self.band)
+        if band == "NIR":
+            mask_list = [[5800, 7005], [13500, 15900]]
+        elif band == "VIS":
+            mask_list = [[0, 1000], [int(self.cut_data.shape[1] - 50), int(self.cut_data.shape[1] - 1)]]
+        elif band == "UVB":
+            mask_list = [[0, 500]]
+
+        # --- save keywords ---
+        self.keywords_fit = dict(
+            n_picks=n_picks,
+            pixel_limit=[x_min, x_max],
+            bound_sigma=bound_sigma,
+            distribution=distribution,
+            param_value=param_value,
+            param_limit=param_limit,
+            param_fix=param_fix,
+            no_use_real_error=no_use_real_error,
+            initial_separation=init_sep,
+            initial_center=init_center_arr,   # store full trace array
+            band=band,
+            mask_list=mask_list,
+        )
+
+        # --- call parallel_fit with per-column initial_center array ---
+        self.fit_result = parallel_fit(
+            data, error, n_picks,
+            initial_center=init_center_arr,      # <-- array (Option B)
+            initial_separation=init_sep,
+            pixel_limit=[x_min, x_max],
+            bound_sigma=bound_sigma,
+            distribution=distribution,
+            mask_list=mask_list,
+            param_value=param_value,
+            param_limit=param_limit,
+            param_fix=param_fix
+        )
+
+        return init_center_arr, init_sep
+
