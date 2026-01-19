@@ -8,6 +8,7 @@ import warnings
 from .utils import find_signal,guess_picks_image,gaussian_with_error,integrated_gaussian,integrated_moffat,moffat_with_error
 from .fitting import parallel_fit
 from tuskitoo.utils.utils import sigma_clip_1d
+from scipy.signal import savgol_filter
 import pandas as pd 
 import pickle
 
@@ -105,7 +106,7 @@ class Expectra2D:
             return
         self.relevant_keywords_header = {i:self.header[i] for i in ["ORIGIN","INSTRUME","OBJECT","NAXIS1","CRVAL1","CD1_1","CUNIT1","BUNIT","CD2_2","OBJECT","ESO SEQ ARM"] if i in list(self.header.keys()) }
         self.name = self.relevant_keywords_header["OBJECT"]
-        self.band = self.relevant_keywords_header["ESO SEQ ARM"]
+        self.band = self.relevant_keywords_header.get("ESO SEQ ARM","No info")
         #if self.relevant_keywords_header["CUNIT1"]=="nm": to_angs=10
         #self.original_wavelength =  np.array([(self.relevant_keywords_header["CRVAL1"]+i*self.relevant_keywords_header["CD1_1"])*10 for i in self.original_data.shape[1]])
         #calculate wavelenght here for example  
@@ -122,7 +123,7 @@ class Expectra2D:
         return distances_pix
         #{key:value/self.relevant_keywords_header["CD2_2"] for key,value in distances.items()}
     
-           
+
     def run_parallel_fit(self,n_picks=2,pixel_limit=[],bound_sigma=[2],distribution="gaussian",
                         param_value=None,param_limit=None,param_fix=None,no_use_real_error=False,initial_separation=[],initial_center=None,**kwargs):
         """
@@ -132,7 +133,8 @@ class Expectra2D:
         defines masks based on the instrument band, and calls `parallel_fit` to perform
         the actual parallel fitting. It also stores the local parameters used for fitting
         in the attribute `keywords_fit` and the final results in `fit_result`.
-
+        TODO add the init_trace condition.
+        
         Parameters:
         -----------
         n_picks : int, optional, default=2
@@ -184,7 +186,7 @@ class Expectra2D:
         None
             The results are stored in the instance attributes `keywords_fit` and `fit_result`.
         """
-        
+        init_trace = kwargs.get("init_trace")
         if n_picks>1:
             picks=np.array([guess_picks_image(i,n_picks) for i in self.cut_data.T])
             if not initial_center:
@@ -196,7 +198,6 @@ class Expectra2D:
         if n_picks ==1 and not initial_separation:
             initial_center = np.argmax(np.nanmedian(self.cut_data,axis=1))
             initial_separation = []
-        
         print("initial_center:",initial_center,"initial_separation:",initial_separation)
         if isinstance(initial_separation,(float,int)):
             initial_separation = [initial_separation]
@@ -207,6 +208,8 @@ class Expectra2D:
             mask_list = [[0,1000],[int(self.cut_data.shape[1]-50),int(self.cut_data.shape[1]-1)]]
         elif band =="UVB":
             mask_list = [[0,500]]
+        else:
+            mask_list = []
         #guess_separation how to work with something like this?
         # guess_separation
         #print(self.cut_data.shape,self.cut_error.shape)
@@ -221,7 +224,7 @@ class Expectra2D:
         if 'picks' in self.keywords_fit.keys():
             self.keywords_fit.pop('picks')
         self.fit_result = parallel_fit(data,error,n_picks,initial_center=initial_center,initial_separation=initial_separation,pixel_limit=pixel_limit,bound_sigma=bound_sigma,distribution=distribution,mask_list=mask_list,\
-                        param_value=param_value,param_limit=param_limit,param_fix=param_fix)
+                        param_value=param_value,param_limit=param_limit,param_fix=param_fix,init_trace =  init_trace)
         
         
         #TODO will be necesary add the self.header but with a non usefull variable?
@@ -294,7 +297,7 @@ class Expectra2D:
         #result_panda[['std_'+i for i in flux_columns]] = errors.T
         #TODO what happend if it is not difine? i should ask for it?
         result_panda['wavelength'] =  np.array([(self.relevant_keywords_header["CRVAL1"]+i*self.relevant_keywords_header["CD1_1"])*10 for i in result_panda['n_pixel'].values])
-        result_panda['units_flux'] = len(result_panda) * [self.relevant_keywords_header["BUNIT"]]
+        result_panda['units_flux'] = len(result_panda) * [self.relevant_keywords_header.get("BUNIT","No info")]
         if len(images) > 0:
             if len(images) == num_source:
                 print(f'setting names of images {np.arange(1, num_source+1).astype(str).tolist()} to {images}')
@@ -446,7 +449,7 @@ class Expectra2D:
         plt.show()
     
     
-    def plot_spectra(self,add_error=False,add_raw=False,save='',force_pix=False,z_s=None,add_lines=False,rest_frame=False,flux_columns=None,**kwargs):
+    def plot_spectra(self,add_error=False,add_raw=False,save='',force_pix=False,z_s=None,add_lines=False,rest_frame=False,flux_columns=None,smooth=False,**kwargs):
         """
         Plot the extracted spectra with optional error bars, raw spectra, and emission/absorption lines.
         Parameters:
@@ -480,15 +483,15 @@ class Expectra2D:
         df = self.results['result_panda']
         wavelength = np.arange(len(df))
         xlabel = "pixel"
-        ylabel = df['units_flux'].values[0]
+        ylabel = f"Flux [{df['units_flux'].values[0]}]"
         if "wavelength" in df.columns and not force_pix:
             #rest frame?
             wavelength = df["wavelength"].values
-            xlabel = "wavelength (A)"
+            xlabel = r"Wavelength [Å]"
             if rest_frame and z_s:
                 wavelength = df["wavelength"].values/(1+z_s)
                 xlabel = "rest frame wavelength (A)"
-        fig, ax = plt.subplots(1, 1, figsize=(35, 15))#, gridspec_kw={'height_ratios': [2, 1]})
+        fig, ax = plt.subplots(1, 1, figsize=(30, 8))#, gridspec_kw={'height_ratios': [2, 1]})
         if not flux_columns:
             flux_columns = [i for i in df.columns.values if 'flux' in i.split('_')[0]]
         alpha = 0.75
@@ -505,7 +508,10 @@ class Expectra2D:
         all_flux = []
         for i,flux in enumerate(flux_columns):
             flux_=df[flux].values
-            flux_raw=df['raw_'+flux].values
+            if smooth:
+                dlam = np.median(np.diff(wavelength))
+                win = max(15, int(round(8.0/dlam)) | 1)  # ~8 Å window, odd
+                flux_ = savgol_filter(flux_, win, 2, mode="mirror")
             error_ = None
             if add_raw:
                 ax.plot(wavelength,flux_raw,label='raw_'+flux)
@@ -513,6 +519,10 @@ class Expectra2D:
                 error_ = df['std_'+flux].values
                 error_[error_>flux_] = 0
                 print("For plotting convenience the errors>flux will be set to 0")
+            if "G" not in flux:
+                flux = "Image "+flux.replace("flux_","")
+            else:
+                flux = "Lens "+flux.replace("flux_","")
             ax.errorbar(wavelength,flux_,yerr=error_,color=colors[i], ecolor=ecolors[i],label=flux,alpha=0.9)
             all_flux.append(flux_)
         all_flux = np.concatenate(all_flux)
@@ -520,7 +530,7 @@ class Expectra2D:
         ax.tick_params(which="both", bottom=True, top=False, left=True, right=False,
             length=10, width=2, labelsize=35)  # Increase tick length and width
         xlim = kwargs.get('xlim',wavelength[[0,-1]])
-        ylim =kwargs.get('ylim',[0, ylim_upper*1.05])
+        ylim =kwargs.get('ylim',[-0.01e-16, ylim_upper*1.05])
         text_fontsize = kwargs.get("text_fontsize",20)
         text_rotation = kwargs.get("text_rotation",0)
         if z_s and add_lines:
@@ -550,17 +560,30 @@ class Expectra2D:
                     ax.axvline(central_wavelength, linestyle="--", color="k", linewidth=2,alpha=0.5)
                     ax.text(central_wavelength, ylim[1], f" {line_name}", fontsize=text_fontsize, rotation=text_rotation,
                             verticalalignment="top", color="k",zorder=10,horizontalalignment="left")
-        offset_text = ax.yaxis.get_offset_text()
-        offset_text.set_fontsize(20)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
+        # offset_text = ax.yaxis.get_offset_text()
+        # offset_text.set_fontsize(30)
+        zl = 0.228
+        # ax.axvline(3933.66*(1+ zl),lw=3,color = "k", ls = "--")
+        # ax.text(3933.66*(1+ zl), 0.8*1e-16, "Lens Ca II K", fontsize=25, rotation=90,
+        #                     verticalalignment="top", color="k",zorder=10,horizontalalignment="right")
+        # ax.axvline(3968.47*(1+ zl),lw=3,color = "k", ls = "--")
+        # ax.text(3968.47*(1+ zl), 0.8*1e-16, "Lens Ca II H", fontsize=25, rotation=90,
+        #                     verticalalignment="top", color="k",zorder=10,horizontalalignment="right")
+        
+        # ax.axvline(2800*(1+ 0.77),lw=3,color = "purple", ls = "--")
+        # ax.text(2800*(1+ 0.77), 1.05*1e-16, "QSO Mg II", fontsize=25, rotation=0,
+        #                      verticalalignment="top", color="purple",zorder=10,horizontalalignment="left")
+        ax.set_xlabel(xlabel, fontsize=30)
+        ax.set_ylabel(r"Flux [$\mathrm{erg\,s^{-1}\,cm^{-2}\,\AA^{-1}}$]", fontsize=30)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
-        ax.xaxis.label.set_size(40)  # Set x-axis label font size
-        ax.yaxis.label.set_size(40)  # Set y-axis label font size 
-        plt.legend(loc='best', prop={'size': 24}, frameon=False)
+        offset = ax.yaxis.get_offset_text()
+        offset.set_fontsize(30)  # or whatever size you like
+        ax.xaxis.label.set_size(30)  # Set x-axis label font size
+        ax.yaxis.label.set_size(30)  # Set y-axis label font size 
+        plt.legend(loc='best', prop={'size': 30}, frameon=False)
         if save:
-            plt.savefig(f"images/{save}.jpg", dpi=300, bbox_inches='tight')
+            plt.savefig(f"images/{save}.pdf", dpi=300, bbox_inches='tight')
             plt.close()
         else:
             plt.show()
@@ -624,3 +647,539 @@ class Expectra2D:
         if verbose:
             print(f"cut center {center} and cut size {size}")
         return image[int(center-size//2):int(center+size//2),:]
+    
+    
+    def plot_slices_overlay(
+        self,
+        x_step=25,
+        x_min=0,
+        x_max=None,
+        normalize=True,
+        subtract_bg=True,
+        bg_percentile=10,
+        alpha=0.35,
+        show_trace_centroid=True,
+        threshold_frac=0.25,
+        vmin=None,
+        vmax=None,
+        show_x_lines=True,
+        x_line_alpha=0.35,
+        x_line_lw=1.5,
+        cmap_name="viridis",
+        trace_array = None):
+        """
+        Plot the 2D cut-out and overlay many spatial profiles (y-slices) for different x columns.
+        Optionally draw vertical lines on the 2D image at each sampled x, with matching colors.
+        """
+        data = self.cut_data
+        ny, nx = data.shape
+        if x_max is None:
+            x_max = nx
+
+        fig, (ax_img, ax_prof) = plt.subplots(
+            2, 1, figsize=(14, 9), gridspec_kw={"height_ratios": [2.0, 1.0]}, sharex=False
+        )
+
+        if vmin is None or vmax is None:
+            vmin_, vmax_ = np.nanpercentile(data, [5, 95])
+            if vmin is None:
+                vmin = vmin_
+            if vmax is None:
+                vmax = vmax_
+
+        im = ax_img.imshow(data, aspect="auto", vmin=vmin, vmax=vmax)
+        ax_img.set_title("2D cut")
+        ax_img.set_xlabel("X (dispersion pixel)")
+        ax_img.set_ylabel("Y (spatial pixel)")
+        fig.colorbar(im, ax=ax_img, label="intensity")
+
+        ys = np.arange(ny)
+
+        x_list = list(range(int(x_min), int(x_max), int(x_step)))
+        n_lines = len(x_list)
+
+        cmap = plt.get_cmap(cmap_name)
+        colors = [cmap(i / max(n_lines - 1, 1)) for i in range(n_lines)]
+
+        xs_cent, y0s = [], []
+
+        for idx, x in enumerate(x_list):
+            prof = data[:, x].astype(float)
+
+            if subtract_bg:
+                prof = prof - np.nanpercentile(prof, bg_percentile)
+
+            m = np.nanmax(prof)
+            if not np.isfinite(m) or m <= 0:
+                continue
+
+            prof_plot = (prof / m) if normalize else prof
+            ax_prof.plot(ys, prof_plot, alpha=alpha, color=colors[idx])
+
+            if show_x_lines:
+                ax_img.axvline(x, color=colors[idx], alpha=x_line_alpha, lw=x_line_lw)
+
+            if show_trace_centroid:
+                mask = prof > (threshold_frac * m)
+                if mask.sum() >= 3:
+                    w = prof[mask]
+                    y = ys[mask]
+                    y0 = np.sum(y * w) / np.sum(w)
+                    xs_cent.append(x)
+                    y0s.append(y0)
+
+        ax_prof.set_title(f"Spatial profiles (step={x_step})")
+        ax_prof.set_xlabel("Y (spatial pixel)")
+        ax_prof.set_ylabel("Normalized flux" if normalize else "Flux")
+        ax_prof.grid(alpha=0.2)
+        
+        if isinstance(trace_array,np.ndarray):
+            ax_img.plot(np.arange(len(trace_array)), trace_array, lw=2, label="centroid trace",c="red")
+            ax_img.legend(loc="best")
+            return 
+        if show_trace_centroid and len(xs_cent) > 0:
+            ax_img.plot(xs_cent, y0s, lw=2, label="centroid trace")
+            ax_img.legend(loc="best")
+
+        plt.tight_layout()
+        plt.show()
+
+        if show_trace_centroid:
+            return np.array(xs_cent), np.array(y0s)
+        return None
+    
+
+    def get_trace(
+        self,
+        pixel_limit=None,
+        no_use_real_error=False,
+
+        # ---- trace centroiding ----
+        trace_bg_percentile=10,
+        trace_threshold_frac=0.25,
+        trace_smooth=31,
+        trace_min_valid_frac=0.2,
+
+        # ---- robust / windowed trace ----
+        trace_half_window=15,
+        trace_use_prev=True,
+        trace_clip_percentile=99.5,
+
+        # ---- NEW: polynomial trace ----
+        trace_poly_order=None,          # e.g. 2 or 3, None = disable
+        trace_poly_robust=True,
+        trace_poly_clip_sigma=4.0,
+        trace_poly_max_iter=5,
+
+        # ---- optional separation guessing ----
+        guess_separation_from_peaks=True,
+        peak_window=10,
+        initial_separation=None,
+        initial_center=None,
+
+        # ---- sky subtraction ----
+        do_sky_subtract=False,
+        sky_inner=12,
+        sky_outer=30,
+        sky_stat="median",
+        sky_poly_order=1,
+
+        # ---- CR clipping ----
+        cr_clip_sigma=6.0,
+        cr_clip_maxiters=1,
+
+        **kwargs,):
+        """TODO add that for the values outside the limit use the same function as the other ones"""
+        # ------------------------------------------------------------
+        # Setup
+        # ------------------------------------------------------------
+        data0 = self.cut_data
+        err0  = self.cut_error if not no_use_real_error else np.ones_like(data0)
+
+        ny, nx = data0.shape
+
+        if pixel_limit is None or pixel_limit == []:
+            x_min, x_max = 0, nx
+        else:
+            x_min, x_max = int(pixel_limit[0]), int(pixel_limit[1])
+            x_min = max(0, x_min)
+            x_max = min(nx, x_max)
+
+        xs = np.arange(nx, dtype=float)
+        ys = np.arange(ny, dtype=float)
+
+        # ------------------------------------------------------------
+        # 1) Build centroid trace
+        # ------------------------------------------------------------
+        if initial_center is not None:
+            y0 = np.full(nx, float(initial_center), dtype=float)
+
+        else:
+            y0 = np.full(nx, np.nan, dtype=float)
+            y_prev = None
+
+            for x in range(x_min, x_max):
+                prof = data0[:, x].astype(float)
+
+                bg = np.nanpercentile(prof, trace_bg_percentile)
+                prof = prof - bg
+                prof[~np.isfinite(prof)] = 0.0
+                prof[prof < 0] = 0.0
+                if np.nanmax(prof) <= 0:
+                    continue
+
+                yc = y_prev if (trace_use_prev and y_prev is not None) else np.nanargmax(prof)
+
+                ylo = int(max(0, yc - trace_half_window))
+                yhi = int(min(ny, yc + trace_half_window + 1))
+
+                prof_w = prof[ylo:yhi]
+                ys_w   = ys[ylo:yhi]
+
+                m = np.nanmax(prof_w)
+                if not np.isfinite(m) or m <= 0:
+                    continue
+
+                mask = prof_w > (trace_threshold_frac * m)
+                if mask.sum() < 3:
+                    continue
+
+                w = prof_w[mask]
+                if trace_clip_percentile is not None:
+                    cap = np.nanpercentile(w, trace_clip_percentile)
+                    w = np.clip(w, 0, cap)
+
+                y0[x] = np.sum(ys_w[mask] * w) / np.sum(w)
+                y_prev = y0[x]
+
+            good = np.isfinite(y0) & (xs >= x_min) & (xs < x_max)
+            if good.sum() < trace_min_valid_frac * (x_max - x_min):
+                raise RuntimeError("Trace centroiding failed: too few valid columns")
+
+            y0[x_min:x_max] = np.interp(
+                xs[x_min:x_max],
+                xs[good],
+                y0[good],
+            )
+
+            if trace_smooth and trace_smooth > 1:
+                win = trace_smooth + (trace_smooth % 2 == 0)
+                half = win // 2
+                y0_sm = y0.copy()
+                for x in range(x_min, x_max):
+                    lo = max(x_min, x - half)
+                    hi = min(x_max, x + half + 1)
+                    y0_sm[x] = np.nanmedian(y0[lo:hi])
+                y0 = y0_sm
+
+        # ------------------------------------------------------------
+        # 2) Polynomial trace fit (NEW)
+        # ------------------------------------------------------------
+        if trace_poly_order is not None and trace_poly_order >= 1:
+            fit_mask = np.isfinite(y0) & (xs >= x_min) & (xs < x_max)
+            xfit = xs[fit_mask]
+            yfit = y0[fit_mask]
+
+            mask = np.ones_like(yfit, dtype=bool)
+
+            for _ in range(trace_poly_max_iter if trace_poly_robust else 1):
+                coef = np.polyfit(xfit[mask], yfit[mask], trace_poly_order)
+                ymod = np.polyval(coef, xfit)
+                resid = yfit - ymod
+
+                med = np.nanmedian(resid[mask])
+                mad = np.nanmedian(np.abs(resid[mask] - med))
+                sig = 1.4826 * mad if mad > 0 else np.nanstd(resid[mask])
+                if not np.isfinite(sig) or sig <= 0:
+                    break
+
+                new_mask = np.abs(resid - med) < trace_poly_clip_sigma * sig
+                if new_mask.sum() == mask.sum():
+                    break
+                mask = new_mask
+
+            coef = np.polyfit(xfit[mask], yfit[mask], trace_poly_order)
+            y0[x_min:x_max] = np.polyval(coef, xs[x_min:x_max])
+
+            self.trace_poly_coef = coef  # store for diagnostics
+
+        init_center_arr = y0
+
+        # ------------------------------------------------------------
+        # 3) Sky subtraction (optional)
+        # ------------------------------------------------------------
+        data = data0.copy()
+        err  = err0.copy()
+
+        if do_sky_subtract:
+            for x in range(x_min, x_max):
+                yc = init_center_arr[x]
+                if not np.isfinite(yc):
+                    continue
+
+                y1 = int(max(0, yc - sky_outer))
+                y2 = int(max(0, yc - sky_inner))
+                y3 = int(min(ny, yc + sky_inner))
+                y4 = int(min(ny, yc + sky_outer))
+
+                sky_idx = np.r_[y1:y2, y3:y4]
+                if sky_idx.size < 5:
+                    continue
+
+                col = data[:, x]
+                sky_v = col[sky_idx]
+                good = np.isfinite(sky_v)
+
+                if good.sum() < 5:
+                    continue
+
+                if sky_stat == "poly1":
+                    p = np.polyfit(sky_idx[good], sky_v[good], sky_poly_order)
+                    bg = np.polyval(p, ys)
+                else:
+                    bg = np.nanmedian(sky_v[good])
+
+                data[:, x] -= bg
+
+        # ------------------------------------------------------------
+        # 4) Cosmic ray clipping
+        # ------------------------------------------------------------
+        if cr_clip_sigma is not None and cr_clip_sigma > 0:
+            for _ in range(int(cr_clip_maxiters)):
+                for x in range(x_min, x_max):
+                    yc = init_center_arr[x]
+                    if not np.isfinite(yc):
+                        continue
+
+                    ylo = int(max(0, yc - trace_half_window))
+                    yhi = int(min(ny, yc + trace_half_window + 1))
+
+                    seg = data[ylo:yhi, x]
+                    med = np.nanmedian(seg)
+                    mad = np.nanmedian(np.abs(seg - med))
+                    sig = 1.4826 * mad if mad > 0 else np.nanstd(seg)
+
+                    if np.isfinite(sig) and sig > 0:
+                        cap = med + cr_clip_sigma * sig
+                        data[ylo:yhi, x] = np.minimum(seg, cap)
+
+        return init_center_arr, initial_separation
+
+
+
+
+    # -------------------------------------------------------------------------
+    # NEW: Optimal extraction helpers (IRAF-like; instrument-agnostic)
+    # -------------------------------------------------------------------------
+
+
+    def _sky_subtract_2d_from_trace(
+        self, data, y0_arr, x_min, x_max,
+        sky_inner=10, sky_outer=28,
+        sky_stat="median", sky_poly_order=1,
+        sky_side="both",   # "both" | "up" | "down"
+        ):
+        ny, nx = data.shape
+        ys = np.arange(ny, dtype=float)
+
+        data_sky = data.astype(float).copy()
+        sky_model = np.zeros_like(data_sky, dtype=float)
+
+        for x in range(int(x_min), int(x_max)):
+            yc = y0_arr[x]
+            if not np.isfinite(yc):
+                continue
+
+            y1 = int(max(0, np.floor(yc - sky_outer)))
+            y2 = int(max(0, np.floor(yc - sky_inner)))
+            y3 = int(min(ny, np.ceil(yc + sky_inner)))
+            y4 = int(min(ny, np.ceil(yc + sky_outer)))
+
+            sky_idx = []
+
+            # "down" = lower-y side (y0 - outer : y0 - inner)
+            if sky_side in ("both", "down"):
+                if y2 > y1:
+                    sky_idx.append(np.arange(y1, y2))
+
+            # "up" = higher-y side (y0 + inner : y0 + outer)
+            if sky_side in ("both", "up"):
+                if y4 > y3:
+                    sky_idx.append(np.arange(y3, y4))
+
+            if len(sky_idx) == 0:
+                continue
+
+            sky_idx = np.concatenate(sky_idx)
+            col = data_sky[:, x]
+
+            sky_y = ys[sky_idx]
+            sky_v = col[sky_idx]
+            good = np.isfinite(sky_v)
+
+            if np.count_nonzero(good) < 10:
+                continue
+
+            sky_y = sky_y[good]
+            sky_v = sky_v[good]
+
+            if sky_stat == "poly1":
+                try:
+                    p = np.polyfit(sky_y, sky_v, deg=int(sky_poly_order))
+                    bg = np.polyval(p, ys)
+                except Exception:
+                    bg = np.nanmedian(sky_v) * np.ones_like(ys)
+            else:
+                bg = np.nanmedian(sky_v) * np.ones_like(ys)
+
+            sky_model[:, x] = bg
+            data_sky[:, x] = col - bg
+
+        return data_sky, sky_model
+
+
+    # -------------------------------------------------------------------------
+    # 2) EMPIRICAL PROFILE BUILDER (as you had it)
+    # -------------------------------------------------------------------------
+    def _build_empirical_profile_from_trace(
+        self, data_sky, y0_arr, x_min, x_max,
+        half_window=6, step=5, clip_percentile=99.5
+    ):
+        ny, nx = data_sky.shape
+        w = 2 * int(half_window) + 1
+        profs = []
+
+        for x in range(int(x_min), int(x_max), int(step)):
+            yc = y0_arr[x]
+            if not np.isfinite(yc):
+                continue
+
+            ylo = int(max(0, np.floor(yc - half_window)))
+            yhi = int(min(ny, np.floor(yc + half_window + 1)))
+            if (yhi - ylo) != w:
+                continue
+
+            seg = data_sky[ylo:yhi, x].astype(float)
+            seg[~np.isfinite(seg)] = 0.0
+            seg[seg < 0] = 0.0
+
+            s = np.nansum(seg)
+            if not np.isfinite(s) or s <= 0:
+                continue
+
+            if clip_percentile is not None:
+                cap = np.nanpercentile(seg, clip_percentile)
+                if np.isfinite(cap) and cap > 0:
+                    seg = np.clip(seg, 0, cap)
+
+            seg = seg / np.nansum(seg)
+            profs.append(seg)
+
+        if len(profs) < 10:
+            raise RuntimeError(
+                "Not enough valid columns to build an empirical profile. "
+                "Try increasing pixel_limit range, adjusting half_window, or lowering clip_percentile."
+            )
+
+        P = np.nanmedian(np.array(profs), axis=0)
+        P[P < 0] = 0.0
+        P /= np.nansum(P)
+        return P
+
+
+    # -------------------------------------------------------------------------
+    # 3) OPTIMAL EXTRACTION (passes sky_side + stores diagnostics)
+    # -------------------------------------------------------------------------
+    def optimal_extract_from_trace(
+        self, y0_arr, pixel_limit=None, half_window=6,
+        do_sky_subtract=True,
+        sky_inner=10, sky_outer=28, sky_stat="median", sky_poly_order=1,
+        sky_side="both",
+        profile_step=5, profile_clip_percentile=99.5,
+        cr_clip_sigma=6.0
+    ):
+        data0 = self.cut_data.astype(float)
+        err0  = self.cut_error.astype(float) if hasattr(self, "cut_error") else np.ones_like(data0)
+        
+        ny, nx = data0.shape
+        if pixel_limit is None or pixel_limit == []:
+            x_min, x_max = 0, nx
+        else:
+            x_min, x_max = int(pixel_limit[0]), int(pixel_limit[1])
+            x_min = max(0, x_min); x_max = min(nx, x_max)
+
+        if do_sky_subtract:
+            data_sky, sky_model = self._sky_subtract_2d_from_trace(
+                data0, y0_arr, x_min, x_max,
+                sky_inner=sky_inner, sky_outer=sky_outer,
+                sky_stat=sky_stat, sky_poly_order=sky_poly_order,
+                sky_side=sky_side
+            )
+        else:
+            data_sky = data0.copy()
+            sky_model = np.zeros_like(data0)
+
+        P = self._build_empirical_profile_from_trace(
+            data_sky, y0_arr, x_min, x_max,
+            half_window=half_window, step=profile_step,
+            clip_percentile=profile_clip_percentile
+        )
+
+        w = 2 * int(half_window) + 1
+        flux = np.full(nx, np.nan, dtype=float)
+        ferr = np.full(nx, np.nan, dtype=float)
+
+        for x in range(x_min, x_max):
+            yc = y0_arr[x]
+            if not np.isfinite(yc):
+                continue
+
+            ylo = int(max(0, np.floor(yc - half_window)))
+            yhi = int(min(ny, np.floor(yc + half_window + 1)))
+            if (yhi - ylo) != w:
+                continue
+
+            D = data_sky[ylo:yhi, x].astype(float)
+            V = (err0[ylo:yhi, x].astype(float) ** 2)
+
+            good = np.isfinite(D) & np.isfinite(V) & (V > 0)
+            if np.count_nonzero(good) < 3:
+                continue
+
+            if cr_clip_sigma is not None and cr_clip_sigma > 0:
+                med = np.nanmedian(D[good])
+                mad = np.nanmedian(np.abs(D[good] - med))
+                sig = 1.4826 * mad if np.isfinite(mad) and mad > 0 else np.nanstd(D[good])
+                if np.isfinite(sig) and sig > 0:
+                    cap = med + cr_clip_sigma * sig
+                    D = np.minimum(D, cap)
+
+            num = np.sum(P[good] * D[good] / V[good])
+            den = np.sum((P[good] ** 2) / V[good])
+
+            if np.isfinite(den) and den > 0:
+                flux[x] = num / den
+                ferr[x] = np.sqrt(1.0 / den)
+
+        # store last-run diagnostics
+        self.optimal_results = dict(
+            x_min=x_min, x_max=x_max,
+            y0_arr=y0_arr,
+            half_window=half_window,
+            data_sky=data_sky,
+            sky_model=sky_model,
+            profile=P,
+            flux=flux,
+            ferr=ferr,
+            settings=dict(
+                do_sky_subtract=do_sky_subtract,
+                sky_inner=sky_inner, sky_outer=sky_outer,
+                sky_stat=sky_stat, sky_poly_order=sky_poly_order,
+                sky_side=sky_side,
+                profile_step=profile_step,
+                profile_clip_percentile=profile_clip_percentile,
+                cr_clip_sigma=cr_clip_sigma,
+            )
+        )
+
+        #return flux, ferr

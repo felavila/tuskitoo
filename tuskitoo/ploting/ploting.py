@@ -290,7 +290,7 @@ def plot_spectra(flux_dict,add_error=False,save='',force_pix=False,z_s=None,add_
             image = image +" X "+str(factor[image])
         all_flux.append(flux)
         all_wavelength.append(wavelength)
-        print(image,colors[i])
+        #print(image,colors[i])
         ax.plot(wavelength,flux,color=color,label=image,alpha=alpha)
     #return all_flux,all_wavelength
     all_flux = np.concatenate(all_flux)

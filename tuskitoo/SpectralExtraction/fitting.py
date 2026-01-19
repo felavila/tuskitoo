@@ -10,7 +10,7 @@ from copy import deepcopy
 def make_fit(ydata:np.array,num_source=2,initial_center=None,initial_separation=None
                  ,bound_sigma=None,fix_sep=None,fix_height=None,custom_expr=None
                  ,weights=None,param_limit=None,param_fix=None,param_value=None,verbose=False,\
-                distribution="gaussian"):
+                distribution="gaussian",**kwargs):
     """
     Fits a model to the provided data using either a Gaussian or Moffat profile.
 
@@ -180,10 +180,13 @@ def parallel_fit(image,error,num_source,pixel_limit=None,n_cpu=None,mask_list=[]
     norm_factor[norm_factor == 0] = 1
     normalized_image = np.nan_to_num(proc_image / norm_factor)
     normalized_weight = np.nan_to_num(weight / norm_factor)
+    init_trace = kwargs.get("init_trace")
     global process_pixel
     def process_pixel(args):
         n_pixel, pixel,pixel_weight = args
-        #if i want to add a parameter for the stats part of the matrix always should be and the left of it
+        if isinstance(init_trace, np.ndarray):
+            kwargs["initial_center"] = init_trace[n_pixel]
+            #if i want to add a parameter for the stats part of the matrix always should be and the left of it
         if np.all(pixel== 0) or  np.all(pixel== np.nan):
             return list([0]*parameter_number*num_source)+[1e15]*parameter_number*num_source+ list([np.nan]*parameter_number*num_source)+[1e15,1e15,1e15,1e15,1e15,n_pixel,x_num] 
         fiting =  make_fit(pixel, num_source=num_source,weights=pixel_weight,**kwargs)
