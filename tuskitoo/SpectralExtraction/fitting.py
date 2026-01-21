@@ -93,7 +93,9 @@ def make_fit(ydata:np.array,num_source=2,initial_center=None,initial_separation=
         print(f"Model parameters {params}")
     return result
 
-def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num, init_center_arr=None, init_sep_arr=None):
+def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num,
+                   init_center_arr=None, init_sep_arr=None):
+
     col_idx, n_pixel, pixel, pixel_weight = args
 
     if np.all(pixel == 0) or np.all(np.isnan(pixel)):
@@ -104,9 +106,34 @@ def _process_pixel(args, *, parameter_number, num_source, kwargs, x_num, init_ce
 
     kwargs_local = dict(kwargs)
 
-    # --- apply per-column initial center, if provided ---
+    # --- apply per-column initial center (TRACE), if provided ---
+    ic = None
     if init_center_arr is not None:
-        kwargs_local["initial_center"] = float(init_center_arr[col_idx])
+        ic = float(init_center_arr[col_idx])
+        kwargs_local["initial_center"] = ic
+
+        # optional: keep center_1 within a window around the trace
+        center_half_width = kwargs_local.pop("trace_center_half_width", None)
+        if center_half_width is not None:
+            plim = dict(kwargs_local.get("param_limit", {}) or {})
+            plim["center_1"] = (ic - float(center_half_width),
+                                ic + float(center_half_width))
+            kwargs_local["param_limit"] = plim
+
+        # optional: HARD force center_1 to equal the trace (per column)
+        force_center = kwargs_local.pop("force_center_on_trace", False)
+        if force_center:
+            pv = dict(kwargs_local.get("param_value", {}) or {})
+            pv["center_1"] = ic
+            kwargs_local["param_value"] = pv
+
+            pf = list(kwargs_local.get("param_fix", []) or [])
+            if "center_1" not in pf:
+                pf.append("center_1")
+            kwargs_local["param_fix"] = pf
+    else:
+        # if no trace provided, still consume the flag so it doesn't leak
+        kwargs_local.pop("force_center_on_trace", None)
 
     # --- apply per-column separation ONLY if num_source>1 and init_sep_arr exists ---
     if num_source > 1 and init_sep_arr is not None:

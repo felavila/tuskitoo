@@ -991,11 +991,19 @@ class Expectra2D:
         trace_use_prev=True,
         trace_clip_percentile=99.5,
 
-        # ---- NEW: polynomial trace ----
+        # ---- polynomial trace ----
         trace_poly_order=None,          # e.g. 2 or 3, None = disable
         trace_poly_robust=True,
         trace_poly_clip_sigma=4.0,
         trace_poly_max_iter=5,
+
+        # ---- NEW: left-edge anchoring (fixes "left trace too low") ----
+        trace_left_use_peak_until=200,   # use peak instead of centroid for x <= this
+        trace_left_peak_half_window=6,   # +/- pixels around yc to search peak
+
+        # ---- optional: left-weighted polynomial fit (optional) ----
+        trace_poly_left_xmax=200.0,      # upweight points with x <= this in polyfit
+        trace_poly_left_weight=6.0,      # 3-10 typical
 
         # ---- optional separation guessing ----
         guess_separation_from_peaks=True,
@@ -1036,7 +1044,7 @@ class Expectra2D:
         ys = np.arange(ny, dtype=float)
 
         # ------------------------------------------------------------
-        # 1) Build centroid trace
+        # 1) Build trace (centroid, with left-edge peak anchoring)
         # ------------------------------------------------------------
         if initial_center is not None:
             y0 = np.full(nx, float(initial_center), dtype=float)
@@ -1055,8 +1063,10 @@ class Expectra2D:
                 if np.nanmax(prof) <= 0:
                     continue
 
+                # start search around previous center (continuity) or around global peak
                 yc = y_prev if (trace_use_prev and y_prev is not None) else np.nanargmax(prof)
 
+                # window around yc for trace computation
                 ylo = int(max(0, yc - trace_half_window))
                 yhi = int(min(ny, yc + trace_half_window + 1))
 
@@ -1076,7 +1086,17 @@ class Expectra2D:
                     cap = np.nanpercentile(w, trace_clip_percentile)
                     w = np.clip(w, 0, cap)
 
-                y0[x] = np.sum(ys_w[mask] * w) / np.sum(w)
+                # --- NEW: left-edge anchoring uses PEAK (argmax) instead of centroid ---
+                if trace_left_use_peak_until is not None and x <= int(trace_left_use_peak_until):
+                    ylo2 = int(max(0, yc - trace_left_peak_half_window))
+                    yhi2 = int(min(ny, yc + trace_left_peak_half_window + 1))
+                    seg = prof[ylo2:yhi2]
+                    if seg.size < 3 or not np.isfinite(np.nanmax(seg)):
+                        continue
+                    y0[x] = ys[ylo2:yhi2][np.nanargmax(seg)]
+                else:
+                    y0[x] = np.sum(ys_w[mask] * w) / np.sum(w)
+
                 y_prev = y0[x]
 
             good = np.isfinite(y0) & (xs >= x_min) & (xs < x_max)
@@ -1100,17 +1120,23 @@ class Expectra2D:
                 y0 = y0_sm
 
         # ------------------------------------------------------------
-        # 2) Polynomial trace fit (NEW)
+        # 2) Polynomial trace fit (with optional left-weighting)
         # ------------------------------------------------------------
         if trace_poly_order is not None and trace_poly_order >= 1:
             fit_mask = np.isfinite(y0) & (xs >= x_min) & (xs < x_max)
             xfit = xs[fit_mask]
             yfit = y0[fit_mask]
 
+            # optional left weighting for better boundary behavior
+            wfit = np.ones_like(xfit, dtype=float)
+            if trace_poly_left_xmax is not None and trace_poly_left_weight is not None:
+                left = xfit <= float(trace_poly_left_xmax)
+                wfit[left] *= float(trace_poly_left_weight)
+
             mask = np.ones_like(yfit, dtype=bool)
 
             for _ in range(trace_poly_max_iter if trace_poly_robust else 1):
-                coef = np.polyfit(xfit[mask], yfit[mask], trace_poly_order)
+                coef = np.polyfit(xfit[mask], yfit[mask], trace_poly_order, w=wfit[mask])
                 ymod = np.polyval(coef, xfit)
                 resid = yfit - ymod
 
@@ -1125,7 +1151,7 @@ class Expectra2D:
                     break
                 mask = new_mask
 
-            coef = np.polyfit(xfit[mask], yfit[mask], trace_poly_order)
+            coef = np.polyfit(xfit[mask], yfit[mask], trace_poly_order, w=wfit[mask])
             y0[x_min:x_max] = np.polyval(coef, xs[x_min:x_max])
 
             self.trace_poly_coef = coef  # store for diagnostics
@@ -1208,7 +1234,14 @@ class Expectra2D:
             **kwargs,
         )
 
-        return init_center_arr, initial_separation
+        if n_picks > 1 and initial_separation is not None and len(initial_separation) > 0:
+            centers_all = [init_center_arr]
+            for j, sep in enumerate(initial_separation, start=2):
+                centers_all.append(init_center_arr + float(sep))
+            return init_center_arr, np.array(centers_all)  # shape (n_picks, nx)
+        else:
+            return init_center_arr, None
+
 
 
 
@@ -1833,3 +1866,85 @@ class Expectra2D:
         # final fit with final mask
         coef = np.polyfit(xg[mask], yg[mask], deg=order)
         return coef, good, mask
+
+
+    def boxcar_extract_from_trace(
+        self, y0_arr, pixel_limit=None, half_window=6,
+        do_sky_subtract=True,
+        sky_inner=10, sky_outer=28, sky_stat="median", sky_poly_order=1,
+        sky_side="both",
+        cr_clip_sigma=None
+    ):
+        data0 = self.cut_data.astype(float)
+        err0  = self.cut_error.astype(float) if hasattr(self, "cut_error") else np.ones_like(data0)
+
+        ny, nx = data0.shape
+        if pixel_limit is None or pixel_limit == []:
+            x_min, x_max = 0, nx
+        else:
+            x_min, x_max = int(pixel_limit[0]), int(pixel_limit[1])
+            x_min = max(0, x_min); x_max = min(nx, x_max)
+
+        if do_sky_subtract:
+            data_sky, sky_model = self._sky_subtract_2d_from_trace(
+                data0, y0_arr, x_min, x_max,
+                sky_inner=sky_inner, sky_outer=sky_outer,
+                sky_stat=sky_stat, sky_poly_order=sky_poly_order,
+                sky_side=sky_side
+            )
+        else:
+            data_sky = data0.copy()
+            sky_model = np.zeros_like(data0)
+
+        w = 2 * int(half_window) + 1
+        flux = np.full(nx, np.nan, dtype=float)
+        ferr = np.full(nx, np.nan, dtype=float)
+
+        for x in range(x_min, x_max):
+            yc = y0_arr[x]
+            if not np.isfinite(yc):
+                continue
+
+            ylo = int(max(0, np.floor(yc - half_window)))
+            yhi = int(min(ny, np.floor(yc + half_window + 1)))
+            if (yhi - ylo) != w:
+                continue
+
+            D = data_sky[ylo:yhi, x].astype(float)
+            V = (err0[ylo:yhi, x].astype(float) ** 2)
+
+            good = np.isfinite(D) & np.isfinite(V) & (V > 0)
+            if np.count_nonzero(good) < 3:
+                continue
+
+            # optional CR cap inside aperture
+            if cr_clip_sigma is not None and cr_clip_sigma > 0:
+                med = np.nanmedian(D[good])
+                mad = np.nanmedian(np.abs(D[good] - med))
+                sig = 1.4826 * mad if np.isfinite(mad) and mad > 0 else np.nanstd(D[good])
+                if np.isfinite(sig) and sig > 0:
+                    cap = med + cr_clip_sigma * sig
+                    D = np.minimum(D, cap)
+
+            flux[x] = np.nansum(D[good])
+            ferr[x] = np.sqrt(np.nansum(V[good]))
+
+        # store diagnostics like the optimal path
+        self.boxcar_results = dict(
+            x_min=x_min, x_max=x_max,
+            y0_arr=y0_arr,
+            half_window=half_window,
+            data_sky=data_sky,
+            sky_model=sky_model,
+            flux=flux,
+            ferr=ferr,
+            settings=dict(
+                do_sky_subtract=do_sky_subtract,
+                sky_inner=sky_inner, sky_outer=sky_outer,
+                sky_stat=sky_stat, sky_poly_order=sky_poly_order,
+                sky_side=sky_side,
+                cr_clip_sigma=cr_clip_sigma,
+            )
+        )
+
+        return flux, ferr
