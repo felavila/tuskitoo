@@ -1948,3 +1948,267 @@ class Expectra2D:
         )
 
         return flux, ferr
+
+
+    def compute_trace(
+        self,
+        pixel_limit=None,
+        initial_center=None,
+        # NEW: binning-based trace params
+        x_bin=400,                 # 200–600 typical
+        y_search_halfwin=10,        # +/- around previous y
+        bg_mode="col_median",       # "col_median" | "row_median" | None
+        smooth_bins=3,              # smoothing in bin-space (odd-ish)
+        trace_poly_order=1,         # keep LOW (None, 1, or 2)
+    ):
+        """
+        Compute and store a trace y0_arr(x) following the signal ridge in the 2D cutout,
+        using robust x-binning + peak tracking (recommended for stripy / low-SNR columns).
+
+        Returns
+        -------
+        y0_arr : np.ndarray, shape (nx,)
+            Trace center (y) as a function of x (dispersion pixel).
+        """
+        data = self.cut_data.astype(float)
+        ny, nx = data.shape
+
+        # x-range
+        if pixel_limit is None or pixel_limit == []:
+            x_min, x_max = 0, nx
+        else:
+            x_min, x_max = int(pixel_limit[0]), int(pixel_limit[1])
+            x_min = max(0, x_min)
+            x_max = min(nx, x_max)
+
+        # 1) light background/stripe handling (do NOT overdo it)
+        if bg_mode == "col_median":
+            work = data - np.nanmedian(data, axis=0)[None, :]
+        elif bg_mode == "row_median":
+            work = data - np.nanmedian(data, axis=1)[:, None]
+        else:
+            work = data.copy()
+
+        work[~np.isfinite(work)] = 0.0
+
+        # 2) starting y from a robust stacked profile (or user-provided)
+        if initial_center is not None:
+            y_start = float(initial_center)
+        else:
+            prof_global = np.nanmedian(work[:, x_min:x_max], axis=1)
+            y_start = float(np.nanargmax(prof_global))
+
+        # 3) bin in x and track peak with continuity
+        xb = np.arange(x_min, x_max, int(x_bin))
+        x_centers = []
+        y_peaks = []
+
+        y_prev = int(round(y_start))
+
+        for xa in xb:
+            xb_end = min(int(xa + x_bin), x_max)
+            if xb_end <= xa:
+                continue
+
+            prof = np.nanmedian(work[:, xa:xb_end], axis=1)
+
+            ylo = max(0, y_prev - int(y_search_halfwin))
+            yhi = min(ny, y_prev + int(y_search_halfwin) + 1)
+            seg = prof[ylo:yhi]
+
+            if seg.size < 3 or not np.isfinite(np.nanmax(seg)):
+                continue
+
+            yp = ylo + int(np.nanargmax(seg))
+
+            x_centers.append(0.5 * (xa + xb_end))
+            y_peaks.append(float(yp))
+            y_prev = yp
+
+        x_centers = np.array(x_centers, dtype=float)
+        y_peaks = np.array(y_peaks, dtype=float)
+
+        if len(x_centers) < 2:
+            raise RuntimeError("compute_trace: not enough valid x-bins to build a trace. Try smaller x_bin.")
+
+        # 4) smooth in bin-space (median smoothing)
+        if smooth_bins is not None and int(smooth_bins) > 1 and len(y_peaks) >= int(smooth_bins):
+            k = int(smooth_bins)
+            y_s = y_peaks.copy()
+            for i in range(len(y_peaks)):
+                lo = max(0, i - k // 2)
+                hi = min(len(y_peaks), i + k // 2 + 1)
+                y_s[i] = np.nanmedian(y_peaks[lo:hi])
+            y_peaks = y_s
+
+        # 5) optional LOW-order polynomial (1 recommended; 2 only if needed)
+        if trace_poly_order is not None and int(trace_poly_order) >= 1:
+            order = int(trace_poly_order)
+            if len(y_peaks) > order + 2:
+                coef = np.polyfit(x_centers, y_peaks, deg=order)
+                y_peaks = np.polyval(coef, x_centers)
+                self.trace_poly_coef = coef
+
+        # 6) expand to full x grid
+        y0 = np.full(nx, np.nan, dtype=float)
+        x_full = np.arange(x_min, x_max, dtype=float)
+        y0[x_min:x_max] = np.interp(x_full, x_centers, y_peaks)
+
+        # store diagnostics
+        self.trace_y0_arr = y0
+        self.trace_pixel_limit = (x_min, x_max)
+        self.trace_binned_points = (x_centers, y_peaks)
+        self.trace_start_y = y_start
+
+        return y0
+
+
+
+    def plot_slices_overlay_with_trace(
+        self,
+        y0_arr,
+        x_step=50,
+        x_min=0,
+        x_max=None,
+        normalize=True,
+        subtract_bg=True,
+        bg_percentile=10,
+        alpha=0.35,
+        vmin=None,
+        vmax=None,
+        show_x_lines=True,
+        x_line_alpha=0.35,
+        x_line_lw=1.5,
+        cmap_name="viridis",
+        trace_lw=2.5,
+        trace_color="w",
+        trace_alpha=0.9,
+        show_bin_points=True,
+        bin_point_ms=4,
+        bin_point_color="w",
+        title="2D cut",
+    ):
+        """
+        Plot the 2D cut-out and overlay many spatial profiles (y-slices) for different x columns,
+        plus an externally-provided trace y0_arr(x).
+
+        Parameters
+        ----------
+        y0_arr : array-like, shape (nx,)
+            Trace center y as a function of x (dispersion pixel) in cut coordinates.
+        x_step : int
+            Step in x for drawing spatial profiles.
+        x_min, x_max : int
+            Range in x to plot/overlay.
+        normalize : bool
+            Normalize each spatial profile by its own max (after background subtraction if enabled).
+        subtract_bg : bool
+            Subtract a percentile background from each spatial profile before plotting.
+        bg_percentile : float
+            Percentile used for background subtraction in each column profile.
+        alpha : float
+            Alpha for the profile overlay lines.
+        vmin, vmax : float or None
+            Limits for imshow. If None, uses 5/95 percentiles.
+        show_x_lines : bool
+            Draw vertical lines on 2D image at each sampled x.
+        trace_* : styling for the trace line.
+        show_bin_points : bool
+            If True and self.trace_binned_points exists, overlay those (x_center, y_peak) points.
+        """
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        data = self.cut_data.astype(float)
+        ny, nx = data.shape
+
+        if x_max is None:
+            x_max = nx
+        x_min = int(max(0, x_min))
+        x_max = int(min(nx, x_max))
+
+        # image scaling
+        if vmin is None or vmax is None:
+            vmin_, vmax_ = np.nanpercentile(data, [5, 95])
+            if vmin is None:
+                vmin = vmin_
+            if vmax is None:
+                vmax = vmax_
+
+        fig, (ax_img, ax_prof) = plt.subplots(
+            2, 1, figsize=(14, 9),
+            gridspec_kw={"height_ratios": [2.0, 1.0]},
+            sharex=False
+        )
+
+        im = ax_img.imshow(data, aspect="auto", vmin=vmin, vmax=vmax)
+        ax_img.set_title(title)
+        ax_img.set_xlabel("X (dispersion pixel)")
+        ax_img.set_ylabel("Y (spatial pixel)")
+        fig.colorbar(im, ax=ax_img, label="intensity")
+
+        ys = np.arange(ny, dtype=float)
+
+        # choose sampled x positions
+        x_list = list(range(x_min, x_max, int(x_step)))
+        n_lines = len(x_list)
+
+        cmap = plt.get_cmap(cmap_name)
+        colors = [cmap(i / max(n_lines - 1, 1)) for i in range(n_lines)]
+
+        for idx, x in enumerate(x_list):
+            prof = data[:, x].astype(float)
+
+            if subtract_bg:
+                prof = prof - np.nanpercentile(prof, bg_percentile)
+
+            prof[~np.isfinite(prof)] = 0.0
+
+            m = np.nanmax(prof)
+            if not np.isfinite(m) or m <= 0:
+                continue
+
+            prof_plot = (prof / m) if normalize else prof
+            ax_prof.plot(ys, prof_plot, alpha=alpha, color=colors[idx])
+
+            if show_x_lines:
+                ax_img.axvline(x, color=colors[idx], alpha=x_line_alpha, lw=x_line_lw)
+
+        # overlay trace
+        y0_arr = np.asarray(y0_arr, dtype=float)
+        xs = np.arange(x_min, x_max, dtype=int)
+        yt = y0_arr[x_min:x_max]
+        good = np.isfinite(yt)
+        if np.any(good):
+            ax_img.plot(
+                xs[good], yt[good],
+                lw=trace_lw, color=trace_color, alpha=trace_alpha,
+                label="trace"
+            )
+
+        # overlay binned points if available (from the binned-peak compute_trace)
+        if show_bin_points and hasattr(self, "trace_binned_points"):
+            try:
+                xb, yb = self.trace_binned_points
+                xb = np.asarray(xb, dtype=float)
+                yb = np.asarray(yb, dtype=float)
+                m = (xb >= x_min) & (xb <= x_max) & np.isfinite(yb)
+                if np.any(m):
+                    ax_img.plot(
+                        xb[m], yb[m],
+                        linestyle="None", marker="o",
+                        ms=bin_point_ms, color=bin_point_color, alpha=0.9,
+                        label="bin peaks"
+                    )
+            except Exception:
+                pass
+
+        ax_img.legend(loc="best")
+
+        ax_prof.set_title(f"Spatial profiles (step={x_step})")
+        ax_prof.set_xlabel("Y (spatial pixel)")
+        ax_prof.set_ylabel("Normalized flux" if normalize else "Flux")
+        ax_prof.grid(alpha=0.2)
+
+        plt.tight_layout()
+        plt.show()
