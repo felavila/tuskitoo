@@ -2,32 +2,79 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 
-def arrow_plot(ax,data,angulo_radianes=0):
-   """angulo_radianes angulo de rotacion de la imagen respecto al cielo se puede sacar del header
-   by this rotation_angle = np.arctan(CD2_1 / CD1_1) -> rotation angle respect to the sky"""
-   arrow_length = min(data.shape) * 0.1  # Arrow length covers 10% of the smaller dimension
-   # Calculate the starting position of the arrows
-   start_x = data.shape[0] * 0.2
-   start_y = data.shape[0] * 0.2
-   # Calculate the end positions of the arrows
-   angulo_radianes = angulo_radianes # 1.5708 90 ° in grade
+def arrow_plot(ax, angulo_radianes=0, frac_pos=0.15, frac_len=0.11, color="k"):
+    """
+    Plot N/E arrows using the current axis limits.
 
-   # Add the first arrow
-   arrow_head_width = arrow_head_length = arrow_length * 0.2  # Arrowhead size is 20% of arrow length
-   
-   
-   ax.arrow(start_x, start_y, arrow_length* np.cos(angulo_radianes+1.5708), arrow_length* np.sin(angulo_radianes+1.5708), color='red', head_width=arrow_head_width, head_length=arrow_head_length)
-   # Add the second arrow perpendicular to the first arrow
-   ax.arrow(start_x, start_y,  arrow_length* np.cos(angulo_radianes+1.5708*2),  arrow_length* np.sin(angulo_radianes+1.5708*2), color='red', head_width=arrow_head_width, head_length=arrow_head_length)
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis where the arrows are drawn.
+    angulo_radianes : float, optional
+        Rotation angle of the image with respect to the sky, in radians.
+    frac_pos : float, optional
+        Fractional position inside the axes for the arrow origin.
+    frac_len : float, optional
+        Fraction of the smallest axis span used as arrow length.
+    color : str, optional
+        Arrow/text color.
+    """
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
 
-   # Add text at the end points of each arrow
-   text_offset = 0.1 # Offset for positioning text
-   end_x_blue = (start_x) + 1.4*arrow_length* np.cos(angulo_radianes+1.5708)
-   end_y_blue = (start_y) + 1.4*arrow_length* np.sin(angulo_radianes+1.5708)
-   ax.text(end_x_blue, end_y_blue, "N", ha="center", va='center' ,color='red')
-   end_x_red = (start_x) + 1.4*arrow_length* np.cos(angulo_radianes+1.5708*2)
-   end_y_red = (start_y) + 1.4*arrow_length* np.sin(angulo_radianes+1.5708*2)
-   ax.text(end_x_red,end_y_red, 'E', ha='center', va='center', color='red')
+    xmin, xmax = min(xlim), max(xlim)
+    ymin, ymax = min(ylim), max(ylim)
+
+    dx = xmax - xmin
+    dy = ymax - ymin
+
+    # Start position near lower-left corner of current view
+    start_x = xmin + frac_pos * dx
+    start_y = ymin + frac_pos * dy
+
+    # Arrow length scaled to current displayed region
+    arrow_length = frac_len * min(dx, dy)
+    head_size = 0.2 * arrow_length
+
+    # North direction
+    theta_n = angulo_radianes + np.pi / 2
+    dx_n = arrow_length * np.cos(theta_n)
+    dy_n = arrow_length * np.sin(theta_n)
+
+    # East direction
+    theta_e = angulo_radianes + np.pi
+    dx_e = arrow_length * np.cos(theta_e)
+    dy_e = arrow_length * np.sin(theta_e)
+
+    ax.arrow(
+        start_x, start_y, dx_n, dy_n,
+        color=color, head_width=head_size, head_length=head_size,
+        length_includes_head=True
+    )
+    ax.arrow(
+        start_x, start_y, dx_e, dy_e,
+        color=color, head_width=head_size, head_length=head_size,
+        length_includes_head=True,zorder=10
+    )
+
+    # Labels
+    text_scale = 1.35
+    ax.text(
+        start_x + text_scale * dx_n,
+        start_y + text_scale * dy_n,
+        "N",
+        color=color,
+        ha="center",
+        va="center",
+    )
+    ax.text(
+        start_x + text_scale * dx_e,
+        start_y + text_scale * dy_e,
+        "E",
+        color=color,
+        ha="center",
+        va="center",
+    )
 
 
 

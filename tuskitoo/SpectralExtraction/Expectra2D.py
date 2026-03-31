@@ -18,6 +18,7 @@ def df_get(df, key, default=None):
 #from .spectra_extraction_results import spectral_extraction_results_handler
 
 #Change all to object dosent sound to bad (?)
+#There is a issue with the uncertainty handling.
 class Expectra2D:
     "Main class to handle 2D spectra and extract the spectra"
     
@@ -232,7 +233,7 @@ class Expectra2D:
         #self.serh_1_nir=spectral_extraction_results_handler(full_result_step_1_nir,conditions={"rsquared":0.8},header=self.header,band=self.band,name=self.name,names,wavelength)
     
     
-    def array_to_pandas(self,max_iter=5,sigma=2,region_size=20,over_write = False,images=[] ):
+    def array_to_pandas(self,max_iter=0,sigma=0,region_size=20,over_write = False,images=[],plot_best_column=True ):
         """
         Convert the fitting results into a pandas DataFrame.
         
@@ -308,8 +309,30 @@ class Expectra2D:
 
         if over_write or not hasattr(self, 'results'):
             print("saving")
-            self.results = {'result_panda':result_panda,"multiple_dist":multiple_dist,'image_2d_model':image_2d_model}
-            return 
+            image = np.asarray(self.cut_data, float)
+            model = image_2d_model
+            sigma_model = np.asarray(np.sqrt(np.sum(error_dist**2, axis=0)))
+            sigma_data = getattr(self, "cut_data_err", None)
+            sigma_data = None if sigma_data is None else np.asarray(sigma_data, float)
+            if sigma_data is None and sigma_model is None:
+                resid = image - model  # fallback (not ideal, but OK)
+            else:
+                if sigma_data is None:
+                    sigma_tot = sigma_model
+                elif sigma_model is None:
+                    sigma_tot = sigma_data
+                else:
+                    sigma_tot = np.sqrt(sigma_data**2 + sigma_model**2)
+
+            good = np.isfinite(image) & np.isfinite(model) & np.isfinite(sigma_tot) & (sigma_tot > 0)
+            resid = np.full_like(image, np.nan, dtype=float)
+            resid[good] = (image[good] - model[good]) / sigma_tot[good]
+            self.results = {'result_panda':result_panda,"multiple_dist":multiple_dist,'image_2d_model':image_2d_model,"sigma_model":sigma_model,"resid":resid,"names":images }
+            if plot_best_column:
+                chi2_pix = resid**2   # because resid = (D-M)/sigma_tot
+                chi2_pix[~np.isfinite(chi2_pix)] = 1e41
+                self.plot_data_model(np.argmin(np.sum(chi2_pix,axis=0)))
+            
         
         return results
     
@@ -407,211 +430,7 @@ class Expectra2D:
     #TODO maybe save the keys from the fiting process 
     
     
-    def plot_column(self,):
-        return 
-    
-    def plot_data_model(self,n):
-        """
-        Plot the data, individual model components, and the residual for the nth column.
-        
-        Parameters:
-        -----------
-        n : int
-            Index of the column (pixel) to be plotted.
-        
-        Raises:
-        -------
-        AttributeError:
-            If the results have not been computed (i.e., 'array_to_pandas' has not been run).
-        """
-        if not hasattr(self, 'results'):
-            raise AttributeError(
-                "Error: 'self.results' is not defined. \n"
-                "try runing 'array_to_pandas' first")
-        df = self.results['multiple_dist'].T
-        x_axis = np.arange(self.cut_data.shape[0])
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(35, 15), gridspec_kw={'height_ratios': [2, 1]})#, gridspec_kw={'height_ratios': [2, 1]})
-        sumx = df[n].T.sum(axis=0)
-        for dis in df[n].T:
-            #x_axis = np.linspace(0,self.cut_data.shape[0]-1,len(dis))
-            ax1.plot(x_axis,dis)
-        ax1.plot(x_axis,self.cut_data.T[n])
-        ax1.plot(x_axis,sumx) 
-        ax2.scatter(x_axis,self.cut_data.T[n]-df[n].T.sum(axis=0)) 
-        ax2.axhline(0,ls='--')
-        ax1.set_xlim(0,x_axis[-1])  # Set x-axis label font size
-        ax2.set_xlim(0,x_axis[-1])  # Set x-axis label font size
-        ax1.xaxis.label.set_size(40)  # Set x-axis label font size
-        ax1.yaxis.label.set_size(40)  # Set y-axis label font size
-        ax1.tick_params(which="both",bottom=False,top=False,left=True,right=False,length=10,width=2,labelsize=20,labelbottom=False)
-        ax2.tick_params(which="both",bottom=True,top=False,left=True,right=False,length=10,width=2,labelsize=20,labelbottom=True )
-        plt.legend(loc='best', prop={'size': 24}, frameon=False)
-        plt.show()
-    
-    
-    def plot_spectra(self,add_error=False,add_raw=False,save='',force_pix=False,z_s=None,add_lines=False,rest_frame=False,flux_columns=None,smooth=False,**kwargs):
-        """
-        Plot the extracted spectra with optional error bars, raw spectra, and emission/absorption lines.
-        Parameters:
-        -----------
-        add_error : bool, optional, default=False
-            If True, adds error bars to the plot.
-        add_raw : bool, optional, default=False
-            If True, plots the raw flux values.
-        save : str, optional, default=''
-            If provided, the plot is saved to the specified filename.
-        force_pix : bool, optional, default=False
-            If True, the x-axis will be in pixel units instead of wavelength.
-        z_s : float or None, optional, default=None
-            Redshift value for converting wavelengths to the rest frame.
-        add_lines : bool, optional, default=False
-            If True, vertical lines for known spectral features will be added.
-        rest_frame : bool, optional, default=False
-            If True and z_s is provided, the wavelengths are converted to the rest frame.
-        kwargs : dict
-            Additional keyword arguments for customizing the plot (e.g., xlim, ylim, text_fontsize).
-        
-        Raises:
-        -------
-        AttributeError:
-            If the results have not been computed (i.e., 'array_to_pandas' has not been run).
-        """
-        if not hasattr(self, 'results'):
-            raise AttributeError(
-                "Error: 'self.results' is not defined. \n"
-                "try runing 'array_to_pandas' first")
-        df = self.results['result_panda']
-        wavelength = np.arange(len(df))
-        xlabel = "pixel"
-        ylabel = f"Flux [{df['units_flux'].values[0]}]"
-        if "wavelength" in df.columns and not force_pix:
-            #rest frame?
-            wavelength = df["wavelength"].values
-            xlabel = r"Wavelength [Å]"
-            if rest_frame and z_s:
-                wavelength = df["wavelength"].values/(1+z_s)
-                xlabel = "rest frame wavelength (A)"
-        fig, ax = plt.subplots(1, 1, figsize=(30, 8))#, gridspec_kw={'height_ratios': [2, 1]})
-        if not flux_columns:
-            flux_columns = [i for i in df.columns.values if 'flux' in i.split('_')[0]]
-        alpha = 0.75
-        if len(flux_columns)>2:
-            alpha  = 0.6
-        colors = ['b','r','g']
-        colors = ['dodgerblue','crimson','forestgreen']
-        #colors = ['navy','firebrick','limegreen']
-        colors = ['#1f77b4', '#d62728', '#2ca02c']
-        colors = ['#4c72b0', '#dd8452', '#55a868']
-        # Alternative 3: ColorBrewer Set1 (vibrant and high-contrast colors)
-        colors = ['#377eb8', '#e41a1c', '#4daf4a']
-        ecolors = ['lightskyblue','LightCoral',"LightGreen"]
-        all_flux = []
-        for i,flux in enumerate(flux_columns):
-            flux_=df[flux].values
-            if smooth:
-                dlam = np.median(np.diff(wavelength))
-                win = max(15, int(round(8.0/dlam)) | 1)  # ~8 Å window, odd
-                flux_ = savgol_filter(flux_, win, 2, mode="mirror")
-            error_ = None
-            if add_raw:
-                ax.plot(wavelength,flux_raw,label='raw_'+flux)
-            if add_error:
-                error_ = df['std_'+flux].values
-                error_[error_>flux_] = 0
-                print("For plotting convenience the errors>flux will be set to 0")
-            if "G" not in flux:
-                flux = "Image "+flux.replace("flux_","")
-            else:
-                flux = "Lens "+flux.replace("flux_","")
-            ax.errorbar(wavelength,flux_,yerr=error_,color=colors[i], ecolor=ecolors[i],label=flux,alpha=0.9)
-            all_flux.append(flux_)
-        all_flux = np.concatenate(all_flux)
-        ylim_lower, ylim_upper = np.percentile(all_flux, [1, 99.99])
-        ax.tick_params(which="both", bottom=True, top=False, left=True, right=False,
-            length=10, width=2, labelsize=35)  # Increase tick length and width
-        xlim = kwargs.get('xlim',wavelength[[0,-1]])
-        ylim =kwargs.get('ylim',[-0.01e-16, ylim_upper*1.05])
-        text_fontsize = kwargs.get("text_fontsize",20)
-        text_rotation = kwargs.get("text_rotation",0)
-        if z_s and add_lines:
-            agn_lines = {
-            "Lya": 1216,         # Lyman-alpha
-            "CIV": 1549,         # Carbon IV
-            "CIII_1909": 1909,   # Carbon III]
-            "MgII": 2800,        # Magnesium II
-            "HeII_4686": 4686,   # Helium II
-            "Hβ": 4861,          # Hydrogen Balmer beta
-            "OIII_4959": 4959,   # [O III] 4959
-            "OIII_5007": 5007,   # [O III] 5007
-            "OI_6300": 6300,     # [O I] 6300
-            "NII_6548": 6548,    # [N II] 6548
-            "Hα": 6563,          # Hydrogen Balmer alpha
-            "NII_6583": 6583,    # [N II] 6583
-            "SII_6716": 6716,    # [S II] 6716
-            "SII_6731": 6731     # [S II] 6731
-            }
 
-            for line_name,central_wavelength in agn_lines.items():
-                if rest_frame:
-                    central_wavelength = central_wavelength
-                else:
-                    central_wavelength = central_wavelength*(1+z_s)
-                if max(xlim)>central_wavelength and min(xlim)<central_wavelength:
-                    ax.axvline(central_wavelength, linestyle="--", color="k", linewidth=2,alpha=0.5)
-                    ax.text(central_wavelength, ylim[1], f" {line_name}", fontsize=text_fontsize, rotation=text_rotation,
-                            verticalalignment="top", color="k",zorder=10,horizontalalignment="left")
-        # offset_text = ax.yaxis.get_offset_text()
-        # offset_text.set_fontsize(30)
-        zl = 0.228
-        # ax.axvline(3933.66*(1+ zl),lw=3,color = "k", ls = "--")
-        # ax.text(3933.66*(1+ zl), 0.8*1e-16, "Lens Ca II K", fontsize=25, rotation=90,
-        #                     verticalalignment="top", color="k",zorder=10,horizontalalignment="right")
-        # ax.axvline(3968.47*(1+ zl),lw=3,color = "k", ls = "--")
-        # ax.text(3968.47*(1+ zl), 0.8*1e-16, "Lens Ca II H", fontsize=25, rotation=90,
-        #                     verticalalignment="top", color="k",zorder=10,horizontalalignment="right")
-        
-        # ax.axvline(2800*(1+ 0.77),lw=3,color = "purple", ls = "--")
-        # ax.text(2800*(1+ 0.77), 1.05*1e-16, "QSO Mg II", fontsize=25, rotation=0,
-        #                      verticalalignment="top", color="purple",zorder=10,horizontalalignment="left")
-        ax.set_xlabel(xlabel, fontsize=30)
-        ax.set_ylabel(r"Flux [$\mathrm{erg\,s^{-1}\,cm^{-2}\,\AA^{-1}}$]", fontsize=30)
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim)
-        offset = ax.yaxis.get_offset_text()
-        offset.set_fontsize(30)  # or whatever size you like
-        ax.xaxis.label.set_size(30)  # Set x-axis label font size
-        ax.yaxis.label.set_size(30)  # Set y-axis label font size 
-        plt.legend(loc='best', prop={'size': 30}, frameon=False)
-        if save:
-            plt.savefig(f"images/{save}.pdf", dpi=300, bbox_inches='tight')
-            plt.close()
-        else:
-            plt.show()
-    
-    def plot_cut_out(self):
-        """
-        Plot the 2D cut-out image and the stacked median profile.
-        """
-        norm_image = self.cut_data/self.cut_data.max(axis=0)
-        fig,axs = plt.subplots(1, 2, figsize=(18, 5))
-        # Plot data on the first subplot
-        im = axs[0].imshow(norm_image,aspect="auto",vmin=0,vmax=1)
-        axs[0].set_title('2d cut')
-        axs[0].set_xlabel('X-pixel')
-        axs[0].set_ylabel('Y-pixel')
-        
-        plt.colorbar(im, ax=axs[0], label="normalized intensity")
-
-        axs[1].plot(np.nanmedian(norm_image,axis=1), color='orange')
-        axs[1].set_xlim(np.arange(len(np.nanmedian(norm_image,axis=1)))[[0,-1]])
-        axs[1].axhline(0, ls= '--')
-        axs[1].set_title('stacked median')
-        axs[1].set_xlabel('y-pixels')
-        axs[1].set_ylabel('intensity')
-        plt.tight_layout()
-        plt.show()
-    def run_cut_2d(self,center,size,verbose=False):
-        return 
     @staticmethod
     def cut_2d_image(image,center=None,size=None,verbose=False):
         """
@@ -968,11 +787,6 @@ class Expectra2D:
 
 
 
-    # -------------------------------------------------------------------------
-    # NEW: Optimal extraction helpers (IRAF-like; instrument-agnostic)
-    # -------------------------------------------------------------------------
-
-
     def _sky_subtract_2d_from_trace(
         self, data, y0_arr, x_min, x_max,
         sky_inner=10, sky_outer=28,
@@ -1038,9 +852,7 @@ class Expectra2D:
         return data_sky, sky_model
 
 
-    # -------------------------------------------------------------------------
-    # 2) EMPIRICAL PROFILE BUILDER (as you had it)
-    # -------------------------------------------------------------------------
+
     def _build_empirical_profile_from_trace(
         self, data_sky, y0_arr, x_min, x_max,
         half_window=6, step=5, clip_percentile=99.5
@@ -1087,9 +899,6 @@ class Expectra2D:
         return P
 
 
-    # -------------------------------------------------------------------------
-    # 3) OPTIMAL EXTRACTION (passes sky_side + stores diagnostics)
-    # -------------------------------------------------------------------------
     def optimal_extract_from_trace(
         self, y0_arr, pixel_limit=None, half_window=6,
         do_sky_subtract=True,
@@ -1183,3 +992,495 @@ class Expectra2D:
         )
 
         #return flux, ferr
+
+    
+    
+        
+    def plot_2d_image_residuals(self, save="", use_model_unc=True,v_res = (-2,2), **kwargs):
+        image = np.asarray(self.cut_data, float)
+        model = np.asarray(self.results["image_2d_model"], float)
+        sigma_data = getattr(self, "cut_data_err", None)
+        sigma_data = None if sigma_data is None else np.asarray(sigma_data, float)
+
+        sigma_model = None
+        if use_model_unc and "sigma_model" in self.results:
+            sigma_model = np.asarray(self.results["sigma_model"], float)
+
+        if sigma_data is None and sigma_model is None:
+            resid = image - model  # fallback (not ideal, but OK)
+        else:
+            if sigma_data is None:
+                sigma_tot = sigma_model
+            elif sigma_model is None:
+                sigma_tot = sigma_data
+            else:
+                sigma_tot = np.sqrt(sigma_data**2 + sigma_model**2)
+
+            good = np.isfinite(image) & np.isfinite(model) & np.isfinite(sigma_tot) & (sigma_tot > 0)
+            resid = np.full_like(image, np.nan, dtype=float)
+            resid[good] = (image[good] - model[good]) / sigma_tot[good]
+
+        pos = np.isfinite(image) & (image > 0)
+        if np.any(pos):
+            ref = np.nanmedian(image[pos])
+            k = int(np.floor(np.log10(ref))) if ref > 0 else 0
+        else:
+            k = 0
+        S = 10.0**k
+
+        image_disp = image / S
+        model_disp = model / S
+
+        v_img = np.nanpercentile(image_disp[np.isfinite(image_disp)], [5, 95])
+        #v_res = np.nanpercentile(5, 95)
+        #v_res = max(v_res, 1.0)
+
+        fig, axes = plt.subplots(1, 3, figsize=(45, 10))
+
+        panels = [
+            ("original_image", image_disp, (v_img[0], v_img[1]), f"flux / 1e{k}"),
+            ("model_image",    model_disp, (v_img[0], v_img[1]), f"flux / 1e{k}"),
+            ("residual (D-M)/σ", resid,     v_res,    "sigma"),
+        ]
+        
+        for ax, (title, arr, (vmin, vmax), cblabel) in zip(axes, panels):
+            ax.set_title(title, fontsize=28)
+            im = ax.imshow(arr, aspect="auto", vmin=vmin, vmax=vmax, cmap="coolwarm")
+            cbar = plt.colorbar(im, ax=ax, shrink=1)
+            cbar.set_label(cblabel, fontsize=18)
+            cbar.ax.tick_params(labelsize=14)
+            ax.set_xlabel("Pixel", fontsize=18)
+            ax.tick_params(axis="both", which="major", labelsize=14)
+
+        if save:
+            plt.savefig(f"{save}.jpg", bbox_inches="tight")
+        plt.show()
+        return panels
+    
+    
+    def plot_column(self, key, *, x_key=None, ax=None, show=True, title=None,
+                    bins="auto", marker=".", alpha=0.7):
+        """
+        ?
+        """
+        # --- Validate ---
+        if not hasattr(self, "results"):
+            raise AttributeError(
+                "Error: 'self.results' is not defined.\n"
+                "Try running 'array_to_pandas' first."
+            )
+
+        _pandas = self.results.get("result_panda", None)
+        if _pandas is None:
+            raise AttributeError("Error: 'self.results[\"result_panda\"]' is not defined.")
+
+        if key not in _pandas.columns:
+            raise AttributeError(f"Error: '{key}' not in pandas result. Available: {_pandas.columns}")
+
+        y = np.asarray(_pandas[key].values, dtype=float)
+        n_pix = int(y.size)
+
+        # x handling: either an x column or pixel index
+        if x_key is None:
+            x = np.arange(n_pix, dtype=float)
+            x_label = "pixel index"
+        else:
+            if x_key not in _pandas.columns:
+                raise AttributeError(f"Error: '{x_key}' not in pandas result. Available: {_pandas.columns}")
+            x = np.asarray(_pandas[x_key].values, dtype=float)
+            if x.size != y.size:
+                raise ValueError(f"Size mismatch: len({x_key})={x.size} but len({key})={y.size}")
+            x_label = x_key
+
+        # finite mask for stats/hist
+        finite = np.isfinite(y) & np.isfinite(x)
+        yf = y[finite]
+        xf = x[finite]
+
+        # --- Stats ---
+        out = {
+            "key": key,
+            "x_key": x_key,
+            "n_pixels_total": n_pix,
+            "n_finite": int(yf.size),
+            "n_nan_or_inf": int(n_pix - yf.size),
+            "q16": np.nan,
+            "median": np.nan,
+            "q84": np.nan,
+            "iqr": np.nan,
+            "mean": np.nan,
+            "std": np.nan,
+            "min": np.nan,
+            "max": np.nan,
+            "%between":np.nan
+        }
+
+        if yf.size > 0:
+            q16, med, q84 = np.percentile(yf, [16, 50, 84])
+            within = (yf >= q16) & (yf <= q84)
+            pct_within = 100.0 * within.mean()
+            out.update({
+                "q16": float(q16),
+                "median": float(med),
+                "q84": float(q84),
+                "iqr": float(q84 - q16),
+                "mean": float(np.mean(yf)),
+                "std": float(np.std(yf, ddof=1)) if yf.size > 1 else 0.0,
+                "min": float(np.min(yf)),
+                "max": float(np.max(yf)),
+                "%between": float(pct_within)
+            })
+
+        # --- Plotting: two panels ---
+        created_fig = False
+        if ax is None:
+            fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(20, 8), constrained_layout=True)
+            created_fig = True
+        else:
+            ax0, ax1 = ax
+            fig = ax0.figure
+
+        # (1) Distribution
+        if yf.size > 0:
+            ax0.hist(yf, bins=bins, alpha=0.8)
+            ax0.axvline(out["median"], linestyle="--", linewidth=2, label=f"median = {out['median']:.4g}",zorder =10,color="k")
+            ax0.axvline(out["q16"], linestyle=":", linewidth=2, label=f"q16 = {out['q16']:.4g}",zorder =10,color="k")
+            ax0.axvline(out["q84"], linestyle=":", linewidth=2, label=f"q84 = {out['q84']:.4g}",zorder =10,color="k")
+            ax0.legend()
+        else:
+            ax0.text(0.5, 0.5, "No finite values to plot", transform=ax0.transAxes,
+                    ha="center", va="center")
+        ax0.set_xlabel(key)
+        ax0.set_ylabel("count")
+
+        # (2) Evolution vs x
+        if yf.size > 0:
+            # plot all points (including NaNs as gaps) by using y directly
+            ax1.plot(x, y, marker=marker, linestyle="None", alpha=0.8)
+
+            # quartile horizontal lines
+            ax1.axhline(out["median"], linestyle="--", linewidth=2, label="median",zorder =10,color="k")
+            ax1.axhline(out["q16"], linestyle=":", linewidth=2, label="q16",zorder =10,color="k")
+            ax1.axhline(out["q84"], linestyle=":", linewidth=2, label="q84",zorder =10,color="k")
+            ax1.legend()
+        else:
+            ax1.text(0.5, 0.5, "No finite values to plot", transform=ax1.transAxes,
+                    ha="center", va="center")
+
+        ax1.set_xlabel(x_label)
+        ax1.set_ylabel(key)
+        fig.suptitle(title if title is not None else f"{key} (valid {(len(yf[yf!=0])/len(yf))*100:.3f}%)", fontsize=14)
+
+        if created_fig and show:
+            plt.show()
+
+        return out
+    
+    def plot_data_model(self, n, *, param_keys=None, title_prefix="Pixel", text_loc=(0.02, 0.98)):
+        """
+        Plot the data, individual model components, and the residual for the nth column (pixel),
+        adding a suptitle and an in-plot parameter text box.
+
+        Parameters
+        ----------
+        n : int
+            Pixel index to plot (column in cut_data.T).
+        param_keys : list[str] or None
+            If provided, these column names from self.results["result_panda"] (row n)
+            will be printed in the text box. If None, tries to show a reasonable subset.
+        title_prefix : str
+            Prefix for the suptitle.
+        text_loc : (float, float)
+            Location of the text box in axes-fraction coordinates (x, y).
+            Default is top-left inside ax1.
+        """
+        import numpy as np
+        import matplotlib.pyplot as plt
+
+        if not hasattr(self, "results"):
+            raise AttributeError(
+                "Error: 'self.results' is not defined.\n"
+                "Try running 'array_to_pandas' first."
+            )
+
+        # --- Get model components matrix ---
+        df = self.results["multiple_dist"].T  # your current layout assumption
+
+        # --- Basic x axis ---
+        x_axis = np.arange(self.cut_data.shape[0])
+
+        fig, (ax1, ax2) = plt.subplots(
+            2, 1, figsize=(35, 15),
+            gridspec_kw={"height_ratios": [2, 1]},
+            constrained_layout=True,
+        )
+
+        # --- Model sum for pixel n ---
+        comps = df[n].T  # iterable over components
+        sumx = comps.sum(axis=0)
+        names = self.results["names"]
+        # --- Plot components ---
+        for i, dis in enumerate(comps):
+            ax1.plot(x_axis, dis, alpha=0.8, label=f"comp {names[i]}")
+
+        # --- Plot data + model sum ---
+        y_data = self.cut_data.T[n]
+        ax1.plot(x_axis, y_data, linewidth=3, label="data")
+        ax1.plot(x_axis, sumx, linewidth=3, linestyle="--", label="model (sum)")
+
+        # --- Residual ---
+        resid = y_data - sumx
+        ax2.scatter(x_axis, resid, s=15, alpha=0.7)
+        ax2.axhline(0, ls="--")
+
+        # --- Formatting ---
+        ax1.set_xlim(0, x_axis[-1])
+        ax2.set_xlim(0, x_axis[-1])
+
+        ax1.xaxis.label.set_size(40)
+        ax1.yaxis.label.set_size(40)
+
+        ax1.tick_params(which="both", bottom=False, top=False, left=True, right=False,
+                        length=10, width=2, labelsize=20, labelbottom=False)
+        ax2.tick_params(which="both", bottom=True, top=False, left=True, right=False,
+                        length=10, width=2, labelsize=20, labelbottom=True)
+
+        ax2.set_xlabel("pixel index", fontsize=30)
+        ax1.set_ylabel("flux", fontsize=30)
+        ax2.set_ylabel("residual", fontsize=30)
+
+        # --- Suptitle with pixel number ---
+        fig.suptitle(f"{title_prefix} n = {n}", fontsize=34, y=1.02)
+
+        # --- Parameter text box ---
+        param_text = None
+        rp = self.results.get("result_panda", None)
+        if rp is not None and len(rp) > n:
+            row = rp.iloc[n]
+
+            if param_keys is None:
+                # Default: pick numeric columns only (limit to a handful)
+                numeric_cols = [c for c in rp.columns if np.issubdtype(rp[c].dtype, np.number)]
+                # Keep it readable
+                param_keys = numeric_cols[:6]
+
+            lines = []
+            for k in param_keys:
+                if k in rp.columns:
+                    v = row[k]
+                    if isinstance(v, (float, np.floating, int, np.integer)) and np.isfinite(v):
+                        lines.append(f"{k}: {v:.4g}")
+                    else:
+                        lines.append(f"{k}: {v}")
+            if lines:
+                param_text = "\n".join(lines)
+
+        if param_text is None:
+            param_text = "No parameters available in results['result_panda'] for this pixel."
+
+        ax1.text(
+            text_loc[0], text_loc[1],
+            param_text,
+            transform=ax1.transAxes,
+            ha="left", va="top",
+            fontsize=18,
+            bbox=None,
+        )
+        offset = ax1.yaxis.get_offset_text()
+        offset.set_fontsize(30)  # or whatever size you like
+        offset = ax2.yaxis.get_offset_text()
+        offset.set_fontsize(30)  # or whatever size you like
+        # --- Legend ---
+        ax1.legend(loc="best", prop={"size": 18}, frameon=False)
+
+        plt.show()
+    
+    
+    def plot_spectra(self,add_error=False,add_raw=False,save='',force_pix=False,z_s=None,add_lines=False,rest_frame=False,flux_columns=None,smooth=False,**kwargs):
+        """
+        Plot the extracted spectra with optional error bars, raw spectra, and emission/absorption lines.
+        Parameters:
+        -----------
+        add_error : bool, optional, default=False
+            If True, adds error bars to the plot.
+        add_raw : bool, optional, default=False
+            If True, plots the raw flux values.
+        save : str, optional, default=''
+            If provided, the plot is saved to the specified filename.
+        force_pix : bool, optional, default=False
+            If True, the x-axis will be in pixel units instead of wavelength.
+        z_s : float or None, optional, default=None
+            Redshift value for converting wavelengths to the rest frame.
+        add_lines : bool, optional, default=False
+            If True, vertical lines for known spectral features will be added.
+        rest_frame : bool, optional, default=False
+            If True and z_s is provided, the wavelengths are converted to the rest frame.
+        kwargs : dict
+            Additional keyword arguments for customizing the plot (e.g., xlim, ylim, text_fontsize).
+        
+        Raises:
+        -------
+        AttributeError:
+            If the results have not been computed (i.e., 'array_to_pandas' has not been run).
+        """
+        if not hasattr(self, 'results'):
+            raise AttributeError(
+                "Error: 'self.results' is not defined. \n"
+                "try runing 'array_to_pandas' first")
+        df = self.results['result_panda']
+        wavelength = np.arange(len(df))
+        xlabel = "pixel"
+        ylabel = f"Flux [{df['units_flux'].values[0]}]"
+        if "wavelength" in df.columns and not force_pix:
+            #rest frame?
+            wavelength = df["wavelength"].values
+            xlabel = r"Wavelength [Å]"
+            if rest_frame and z_s:
+                wavelength = df["wavelength"].values/(1+z_s)
+                xlabel = "rest frame wavelength (A)"
+        fig, ax = plt.subplots(1, 1, figsize=(30, 8))#, gridspec_kw={'height_ratios': [2, 1]})
+        if not flux_columns:
+            flux_columns = [i for i in df.columns.values if 'flux' in i.split('_')[0]]
+        alpha = 0.75
+        if len(flux_columns)>2:
+            alpha  = 0.6
+        colors = ['b','r','g']
+        colors = ['dodgerblue','crimson','forestgreen']
+        #colors = ['navy','firebrick','limegreen']
+        colors = ['#1f77b4', '#d62728', '#2ca02c']
+        colors = ['#4c72b0', '#dd8452', '#55a868']
+        # Alternative 3: ColorBrewer Set1 (vibrant and high-contrast colors)
+        colors = ['#377eb8', '#e41a1c', '#4daf4a']
+        ecolors = ['lightskyblue','LightCoral',"LightGreen"]
+        all_flux = []
+        for i,flux in enumerate(flux_columns):
+            flux_=df[flux].values
+            if smooth:
+                dlam = np.median(np.diff(wavelength))
+                win = max(15, int(round(8.0/dlam)) | 1)  # ~8 Å window, odd
+                flux_ = savgol_filter(flux_, win, 2, mode="mirror")
+            error_ = None
+            if add_raw:
+                ax.plot(wavelength,flux_raw,label='raw_'+flux)
+            if add_error:
+                error_ = df['std_'+flux].values
+                error_[error_>flux_] = 0
+                print("For plotting convenience the errors>flux will be set to 0")
+            if "G" not in flux:
+                flux = "Image "+flux.replace("flux_","")
+            else:
+                flux = "Lens "+flux.replace("flux_","")
+            ax.errorbar(wavelength,flux_,yerr=error_,color=colors[i], ecolor=ecolors[i],label=flux,alpha=0.9)
+            all_flux.append(flux_)
+        all_flux = np.concatenate(all_flux)
+        ylim_lower, ylim_upper = np.percentile(all_flux, [1, 99.99])
+        ax.tick_params(which="both", bottom=True, top=False, left=True, right=False,
+            length=10, width=2, labelsize=35)  # Increase tick length and width
+        xlim = kwargs.get('xlim',wavelength[[0,-1]])
+        ylim =kwargs.get('ylim',[-0.01e-16, ylim_upper*1.05])
+        text_fontsize = kwargs.get("text_fontsize",20)
+        text_rotation = kwargs.get("text_rotation",0)
+        if z_s and add_lines:
+            agn_lines = {
+            "Lya": 1216,         # Lyman-alpha
+            "CIV": 1549,         # Carbon IV
+            "CIII_1909": 1909,   # Carbon III]
+            "MgII": 2800,        # Magnesium II
+            "HeII_4686": 4686,   # Helium II
+            "Hβ": 4861,          # Hydrogen Balmer beta
+            "OIII_4959": 4959,   # [O III] 4959
+            "OIII_5007": 5007,   # [O III] 5007
+            "OI_6300": 6300,     # [O I] 6300
+            "NII_6548": 6548,    # [N II] 6548
+            "Hα": 6563,          # Hydrogen Balmer alpha
+            "NII_6583": 6583,    # [N II] 6583
+            "SII_6716": 6716,    # [S II] 6716
+            "SII_6731": 6731     # [S II] 6731
+            }
+
+            for line_name,central_wavelength in agn_lines.items():
+                if rest_frame:
+                    central_wavelength = central_wavelength
+                else:
+                    central_wavelength = central_wavelength*(1+z_s)
+                if max(xlim)>central_wavelength and min(xlim)<central_wavelength:
+                    ax.axvline(central_wavelength, linestyle="--", color="k", linewidth=2,alpha=0.5)
+                    ax.text(central_wavelength, ylim[1], f" {line_name}", fontsize=text_fontsize, rotation=text_rotation,
+                            verticalalignment="top", color="k",zorder=10,horizontalalignment="left")
+        # offset_text = ax.yaxis.get_offset_text()
+        # offset_text.set_fontsize(30)
+        zl = 0.228
+        if kwargs.get("add_vline"):
+            ax.axvline([kwargs["add_vline"]])
+        ax.set_xlabel(xlabel, fontsize=30)
+        ax.set_ylabel(r"Flux [$\mathrm{erg\,s^{-1}\,cm^{-2}\,\AA^{-1}}$]", fontsize=30)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        offset = ax.yaxis.get_offset_text()
+        offset.set_fontsize(30)  # or whatever size you like
+        ax.xaxis.label.set_size(30)  # Set x-axis label font size
+        ax.yaxis.label.set_size(30)  # Set y-axis label font size 
+        plt.legend(loc='best', prop={'size': 30}, frameon=False)
+        if save:
+            plt.savefig(f"images/{save}.pdf", dpi=300, bbox_inches='tight')
+            plt.close()
+        else:
+            plt.show()
+    
+    def plot_cut_out(self):
+        """
+        Plot the 2D cut-out image and the stacked median profile.
+        """
+        norm_image = self.cut_data/self.cut_data.max(axis=0)
+        fig,axs = plt.subplots(1, 2, figsize=(18, 5))
+        # Plot data on the first subplot
+        im = axs[0].imshow(norm_image,aspect="auto",vmin=0,vmax=1)
+        axs[0].set_title('2d cut')
+        axs[0].set_xlabel('X-pixel')
+        axs[0].set_ylabel('Y-pixel')
+        
+        plt.colorbar(im, ax=axs[0], label="normalized intensity")
+
+        axs[1].plot(np.nanmedian(norm_image,axis=1), color='orange')
+        axs[1].set_xlim(np.arange(len(np.nanmedian(norm_image,axis=1)))[[0,-1]])
+        axs[1].axhline(0, ls= '--')
+        axs[1].set_title('stacked median')
+        axs[1].set_xlabel('y-pixels')
+        axs[1].set_ylabel('intensity')
+        plt.tight_layout()
+        plt.show()
+        self.mean_signal = np.nanmedian(norm_image,axis=1)
+    def run_cut_2d(self,center,size,verbose=False):
+        return 
+    
+    def get_best_SN_pixel(self, **kwargs):
+        band = kwargs.get("band", self.band)
+
+        if band == "NIR":
+            mask_list = [[5800, 7010], [13500, 15900]]  
+        elif band == "VIS":
+            mask_list = [[0, 1000], [int(self.cut_data.shape[0]-50), int(self.cut_data.shape[0]-1)]]
+        elif band == "UVB":
+            mask_list = [[0, 500]]
+        else:
+            mask_list = []
+
+        # --- compute S/N safely ---
+        sn = self.cut_data / self.cut_error
+        sn = sn.astype(float, copy=False)
+
+        bad = ~np.isfinite(sn) | ~np.isfinite(self.cut_data) | ~np.isfinite(self.cut_error) | (self.cut_error <= 0)
+        sn[bad] = -10_000
+        
+        #mask = np.ones_like(sn, dtype=bool)
+        for mask_range in mask_list:
+            # Use slice to define the range of columns to mask out.
+            # Assumes mask_range is a two-element iterable: (start, stop)
+            sn[:, slice(*mask_range)] = -10_000
+        
+        
+        # per-pixel statistic and best pixel index
+        per_pix = np.nanmedian(sn, axis=0)
+        best_SN = np.nanargmax(per_pix)
+        self.plot_data_model(best_SN)
+        return best_SN, per_pix

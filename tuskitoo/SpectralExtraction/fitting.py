@@ -90,6 +90,8 @@ def make_fit(ydata:np.array,num_source=2,initial_center=None,initial_separation=
     result = model.fit(ydata, params, x=xdata, weights=weights)#,max_nfev=200 
     if verbose:
         print(f"Model parameters {params}")
+    if kwargs.get("model_and_result",False):
+        return result,model
     return result
 
 
@@ -161,14 +163,10 @@ def parallel_fit(image,error,num_source,pixel_limit=None,n_cpu=None,mask_list=[]
         col_start, col_end = 0, image.shape[1]
         pixel_limit = [0, image.shape[1]]
     if isinstance(mask_list, list):
-        # Create a boolean mask with the same shape as the image.
         mask = np.ones_like(proc_image, dtype=bool)
         for mask_range in mask_list:
-            # Use slice to define the range of columns to mask out.
-            # Assumes mask_range is a two-element iterable: (start, stop)
             mask[:, slice(*mask_range)] = False
         proc_image = proc_image * mask
-        # Optionally, you could also mask the error if needed:
         proc_error = proc_error * mask
     parameter_number = 3 if distribution == "gaussian" else 4
     proc_image = proc_image[:, col_start:col_end]
