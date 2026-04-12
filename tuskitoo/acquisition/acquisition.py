@@ -214,9 +214,127 @@ class AcquisitionClass:#ACQUISITION
         ax.tick_params(axis="both", labelsize=14)
         ax.grid()
         plt.show()
-        
+        dict_plot = {
+            "data": cutout2d.data,
+            "wcs": cutout2d.wcs,
+            "imshow_kwargs": {
+                "origin": "lower",
+                "cmap": "grey",
+            },
+            "log_scale": True,
+            "slit_to_plot": slit_to_plot,
+            "dic_images": dic_images,
+            "target_center": target_center,
+            "title": title,
+            "zoom": zoom,
+            "height_slit": height_slit,
+            "width_slit": width_slit,
+            "angle_region": self.angle_region,
+            "fwhm": fwhm,
+            "threshold": threshold,
+        }
+
         return ax,dict_plot
         
+    
+    def slit_plot_c(self,cut_size=None,dic_images=None,height_slit=11, width_slit=1.2,inclination_slit=None,target_center=None,title=None,zoom=40, slit_dic=None,slit_to_plot=None,
+    fwhm=5,threshold=5,ax=None,show=True,):
+        import astropy.units as u
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        cutout2d = self.cutout2d
+        sky_coords = get_objects_in_image(cutout2d, fwhm=fwhm, threshold=threshold)
+
+        height_slit_q = height_slit * u.arcsec
+        width_slit_q = width_slit * u.arcsec
+
+        created_fig = False
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={"projection": cutout2d.wcs})
+            created_fig = True
+        else:
+            fig = ax.figure
+
+        ax.imshow(
+            np.log10(cutout2d.data),
+            origin="lower",
+            cmap="grey",
+        )
+
+        if slit_to_plot:
+            edge_colors_list = ["r", "g", "b", "c", "m", "y"]
+            for n, (key, val) in enumerate(slit_to_plot.items()):
+                target_center_local = val["target_center_header"]
+                inclination_slit_local = val["inclination_slit_header"]
+
+                sky_slit = RectangleSkyRegion(
+                    center=target_center_local,
+                    width=width_slit_q,
+                    height=height_slit_q,
+                    angle=inclination_slit_local,
+                )
+                pix_reg = sky_slit.to_pixel(cutout2d.wcs)
+                pix_reg.plot(
+                    ax=ax,
+                    facecolor="none",
+                    edgecolor=edge_colors_list[n % len(edge_colors_list)],
+                    lw=2,
+                    label=f"position {n+1}",
+                )
+
+        if dic_images:
+            for key, values in dic_images.items():
+                x, y = cutout2d.wcs.world_to_pixel(values)
+                if "G" in key:
+                    ax.text(x, y, key, fontsize=20, c="tab:orange", fontweight="bold")
+                else:
+                    ax.text(x, y, key, fontsize=20, c="tab:purple", fontweight="bold")
+
+            x0, y0 = cutout2d.wcs.world_to_pixel(sky_coords)
+            ax.scatter(x0, y0)
+
+        if len(ax.get_legend_handles_labels()[0]) > 0:
+            handles, labels = ax.get_legend_handles_labels()
+            by_label = dict(zip(labels, handles))
+            ax.legend(by_label.values(), by_label.keys())
+
+        if target_center is not None:
+            x0, y0 = cutout2d.wcs.world_to_pixel(target_center)
+            ax.set_xlim(x0 - zoom, x0 + zoom)
+            ax.set_ylim(y0 - zoom, y0 + zoom)
+
+        ax.set_title(title)
+        arrow_plot(ax, angulo_radianes=self.angle_region, color="r")
+        ax.set_xlabel("RA", fontsize=16)
+        ax.set_ylabel("Dec", fontsize=16)
+        ax.tick_params(axis="both", labelsize=14)
+        ax.grid()
+
+        if show and created_fig:
+            plt.show()
+
+        dict_plot = {
+            "data": cutout2d.data,
+            "wcs": cutout2d.wcs,
+            "imshow_kwargs": {
+                "origin": "lower",
+                "cmap": "grey",
+            },
+            "log_scale": True,
+            "slit_to_plot": slit_to_plot,
+            "dic_images": dic_images,
+            "target_center": target_center,
+            "title": title,
+            "zoom": zoom,
+            "height_slit": height_slit,
+            "width_slit": width_slit,
+            "angle_region": self.angle_region,
+            "fwhm": fwhm,
+            "threshold": threshold,
+        }
+
+        return ax, dict_plot
         
     def slit_plot_old(self,header,cut_size=None,dic_images=None):
         #TODO add condition of only accept slit images to do this plot 
