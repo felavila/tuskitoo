@@ -567,7 +567,8 @@ class Expectra2D:
             return np.array(xs_cent), np.array(y0s)
         return None
     
-
+    def gettrace()
+    
     def get_trace(
         self,
         pixel_limit=None,
@@ -691,9 +692,6 @@ class Expectra2D:
                     y0_sm[x] = np.nanmedian(y0[lo:hi])
                 y0 = y0_sm
 
-        # ------------------------------------------------------------
-        # 2) Polynomial trace fit (NEW)
-        # ------------------------------------------------------------
         if trace_poly_order is not None and trace_poly_order >= 1:
             fit_mask = np.isfinite(y0) & (xs >= x_min) & (xs < x_max)
             xfit = xs[fit_mask]

@@ -303,19 +303,49 @@ def plot_spectra(flux_dict,add_error=False,save='',force_pix=False,z_s=None,add_
     text_rotation = kwargs.get("text_rotation",0)
     if z_s and add_lines:
             agn_lines = {
-            "Lya": 1216,         # Lyman-alpha
-            "CIV": 1549,         # Carbon IV
-            "CIII_1909": 1909,   # Carbon III]
-            "MgII": 2800,        # Magnesium II
-            
-            "Hβ": 4861,          # Hydrogen Balmer beta
-            "OIII_4959": 4959,   # [O III] 4959
-            "OIII_5007": 5007,   # [O III] 5007
-            
-            # [N II] 6548
-            "Hα": 6563,          # Hydrogen Balmer alpha
-                # [N II] 6583
-            }
+    # Rest-frame UV lines
+    "Lya": 1216,              # Lyman-alpha
+    "NV_1240": 1240,          # N V
+    "SiIV_OIV_1400": 1400,    # Si IV + O IV]
+    "CIV": 1549,              # C IV
+    "HeII_1640": 1640,        # He II
+    "OIII_1663": 1663,        # O III]
+    "AlIII_1857": 1857,       # Al III
+    "SiIII_1892": 1892,       # Si III]
+    "CIII_1909": 1909,        # C III]
+    "MgII": 2800,             # Mg II
+    "[Ne V]": 3426,
+    "[Ne IV]":2424 ,
+    # Rest-frame optical lines
+    "OII_3727": 3727,         # [O II]
+    "NeIII_3869": 3869,       # [Ne III]
+    "Hε":3970.072,
+    "Hdelta": 4102,           # H delta
+    "Hgamma": 4341,           # H gamma
+    "Hbeta": 4861,            # H beta
+    "OIII_4959": 4959,        # [O III] 4959
+    "OIII_5007": 5007,        # [O III] 5007
+
+    # Red optical / NIR rest-frame lines
+    "OI_6300": 6300,          # [O I]
+    "NII_6548": 6548,         # [N II] 6548
+    "Halpha": 6563,           # H alpha
+    "NII_6583": 6583,         # [N II] 6583
+    "SII_6716": 6716,         # [S II] 6716
+    "SII_6731": 6731,         # [S II] 6731
+
+    # Common NIR AGN / hydrogen lines
+    "SIII_9069": 9069,        # [S III]
+    "SIII_9531": 9531,        # [S III]
+    "Pa_delta": 10049,        # Pa delta
+    "HeI_10830": 10830,       # He I
+    "Pa_gamma": 10941,        # Pa gamma
+    "Pa_beta": 12822,         # Pa beta
+    "FeII_12567": 12567,      # [Fe II]
+    "FeII_16435": 16435,      # [Fe II]
+    "Pa_alpha": 18751,        # Pa alpha
+    "Br_gamma": 21661,        # Br gamma
+}
             if add_SII:
                 agn_lines.update( {"SII_6716": 6716,    # [S II] 6716
                                     "SII_6731": 6731 })  # [S II] 6731)

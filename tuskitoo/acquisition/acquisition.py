@@ -32,6 +32,7 @@ def get_gaia_cone(coord_center):
     gaia_table = j.get_results()
     gaia_coords = SkyCoord(ra=gaia_table['ra'], dec=gaia_table['dec'], unit=(u.deg, u.deg))
     return gaia_coords
+
 def get_image_inclination(sky_pointing,wcs):
     #
     inclination = Angle(0, 'deg')
@@ -50,7 +51,7 @@ def mach_photo_gaia(coords_sky,gaia_coords,match_threshold=0):
     #print(coords_sky)
     idx, d2d, d3d = coords_sky.match_to_catalog_sky(gaia_coords)
     match_threshold = match_threshold * u.arcsec  # Adjust as needed
-    print(d2d)
+    #print(d2d)
     good_matches = d2d > 0#match_threshold
     gaia_positions = np.column_stack((gaia_coords.ra[idx][good_matches].value, gaia_coords.dec[idx][good_matches].value))
     coords_sky = np.column_stack((coords_sky.ra[good_matches].value, coords_sky.dec[good_matches].value))
@@ -60,7 +61,9 @@ def mach_photo_gaia(coords_sky,gaia_coords,match_threshold=0):
         print("ra_offset is nan ",ra_offset,dec_offset)
         ra_offset = 0
         dec_offset = 0 
-    return ra_offset,dec_offset,idx,good_matches
+    vectorial_offset = {"ra_g":gaia_positions[:,0],"dec_g":gaia_positions[:,1],"ra_i":coords_sky[:,0],"dec_i":coords_sky[:,1]}
+    #self.vectorial_offset = vectorial_offset
+    return ra_offset,dec_offset,idx,good_matches,vectorial_offset
 
 def cut_astro_image(image,wcs,header,cut_size = 40,fwhm=5,threshold=5,plot=False,gaia_coords=None,match_threshold=1,coordinates_images_sky=None):
     sky_pointing = SkyCoord(header["RA"],header["DEC"], unit='deg')
@@ -69,7 +72,7 @@ def cut_astro_image(image,wcs,header,cut_size = 40,fwhm=5,threshold=5,plot=False
     coords_sky,coords_pixel = get_objects_in_image(cutout_2d,fwhm=fwhm)
     angle_region = get_image_inclination(sky_pointing,wcs)
     if gaia_coords:
-        ra_offset,dec_offset,idx,good_matches=mach_photo_gaia(coords_sky,gaia_coords,match_threshold=match_threshold)
+        ra_offset,dec_offset,idx,good_matches,vectorial_offset=mach_photo_gaia(coords_sky,gaia_coords,match_threshold=match_threshold)
         header_copy = deepcopy(header)
         header_copy['CRVAL1'] -= ra_offset
         header_copy['CRVAL2'] -= dec_offset
@@ -131,21 +134,23 @@ class AcquisitionClass:#ACQUISITION
     def cut2d(self,center_correction=False,cut_size=None,sky_pointing=None,plot=False,wcs=None,fwhm=5,threshold=5,match_threshold=1):
         wcs = wcs or self.wcs
         cut_size= cut_size or self.cut_size
-        print(cut_size)
+        #print(cut_size)
         center_cut = sky_pointing or self.sky_pointing
         cutout2d = Cutout2D(self.data,center_cut, (cut_size * u.arcsec, cut_size* u.arcsec),wcs=wcs)
+        self.cutout2d_og = cutout2d
         sky_coords = None
         gaia_coords = None
         cutout2d_previous = None
         sky_coords = get_objects_in_image(cutout2d,fwhm=fwhm,threshold=threshold)
         if center_correction:
             gaia_coords = get_gaia_cone(center_cut)
-            ra_offset,dec_offset,idx,good_matches = mach_photo_gaia(sky_coords,gaia_coords,match_threshold=match_threshold)
-            #print(ra_offset,dec_offset)
+            ra_offset,dec_offset,idx,good_matches,vectorial_offset = mach_photo_gaia(sky_coords,gaia_coords,match_threshold=match_threshold)
+            print("the offcet are ", ra_offset,dec_offset)
             header_copy = deepcopy(self.header)
             header_copy['CRVAL1'] -= ra_offset
             header_copy['CRVAL2'] -= dec_offset
             wcs_copy = WCS(header_copy)
+            self.vectorial_offset = vectorial_offset
             #coords_pixel_new_wcs = np.array(coords_sky.to_pixel(wcs_copy))
             cutout2d_previous = cutout2d
             cutout2d = Cutout2D(self.data,center_cut, (cut_size * u.arcsec, cut_size* u.arcsec),wcs=wcs_copy)
